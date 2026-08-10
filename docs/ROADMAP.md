@@ -12,12 +12,14 @@ Milestones are sequential checkpoints. Per `CLAUDE.md`'s Development Workflow, e
 
 **Status**: In progress (this document is part of it).
 
-## Milestone 1 — Application Shell
+## Milestone 1 — Application Shell ✅
 
-- Monorepo workspace tooling set up (`apps/web` created)
+- Monorepo workspace tooling set up (`apps/web`, `packages/shared`)
 - UI foundation: sidebar, workspace area, request tabs, response area
 - Theme (light/dark)
 - Responsive layout
+
+**Status**: Complete. Shipped: npm-workspaces monorepo, `packages/shared` domain types, the full application shell (top bar, collections sidebar, request tabs, method selector, URL bar, Params/Authorization/Headers/Body/Scripts/Tests panels, response panel with empty state), Zustand-based UI state, light/dark theme, responsive layout down to tablet width, an accessibility pass (labels, focus states, keyboard navigation), 16 Vitest unit tests, and a 5-scenario Playwright smoke suite. No request execution — `Send` shows a "not available yet" notice instead of a fake response, per this milestone's explicit non-goal.
 
 ## Milestone 2 — Request Builder
 

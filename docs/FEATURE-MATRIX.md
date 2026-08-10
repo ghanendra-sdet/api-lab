@@ -9,13 +9,15 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Sidebar navigation (collections tree) | P0 | 1 | Planned |
-| Request tabs (multi-request workspace) | P0 | 1 | Planned |
-| Response panel | P0 | 1 | Planned |
-| Light/dark theme | P1 | 1 | Planned |
-| Responsive layout (usable down to tablet width) | P1 | 1 | Planned |
+| Sidebar navigation (collections tree) | P0 | 1 | Done |
+| Request tabs (multi-request workspace) | P0 | 1 | Done |
+| Response panel | P0 | 1 | Done (empty state only — real response rendering is Milestone 2) |
+| Light/dark theme | P1 | 1 | Done |
+| Responsive layout (usable down to tablet width) | P1 | 1 | Done |
 
 ## Request Building
+
+_Method selection, the URL bar, and the Params/Headers/Body editors have UI in place as of Milestone 1, but nothing is wired to real HTTP execution yet — "Send" shows a not-yet-available notice. Status below reflects execution, per Milestone 2's actual scope._
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
@@ -26,11 +28,11 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 | DELETE | P0 | 2 | Planned |
 | HEAD | P1 | 2 | Planned |
 | OPTIONS | P1 | 2 | Planned |
-| Query parameters (with enable/disable) | P0 | 2 | Planned |
+| Query parameters (with enable/disable) | P0 | 2 | UI in place (Milestone 1); not yet wired to execution |
 | Path parameters (auto-detected) | P0 | 2 | Planned |
-| Headers editor (with enable/disable) | P0 | 2 | Planned |
+| Headers editor (with enable/disable) | P0 | 2 | UI in place (Milestone 1); not yet wired to execution |
 | Cookies (per-domain jar) | P1 | 2 | Planned |
-| Body: raw JSON | P0 | 2 | Planned |
+| Body: raw JSON | P0 | 2 | UI in place (Milestone 1, Monaco editor); not yet wired to execution |
 | Body: raw XML | P1 | 2 | Planned |
 | Body: form-data (multipart) | P0 | 2 | Planned |
 | Body: x-www-form-urlencoded | P0 | 2 | Planned |

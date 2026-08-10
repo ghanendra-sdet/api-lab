@@ -4,7 +4,19 @@ A free, open-source, browser-based API client, testing, mocking, collection runn
 
 API Lab is being built as a zero-install alternative for everyday API development and QA work — build requests, organize them into collections, manage environments, write tests, run them against mock or real endpoints, and generate reports, all from the browser.
 
-> **Status**: early initialization. Architecture and product scope are defined; implementation has not started yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan.
+> **Status**: Milestone 1 (Application Shell) complete. The workspace UI — collections sidebar, request tabs, method/URL bar, Params/Authorization/Headers/Body/Scripts/Tests panels, response panel — is live, but nothing sends real HTTP requests yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan.
+
+## Running Locally
+
+```bash
+npm install
+npm run dev        # apps/web on http://localhost:5173
+npm run typecheck
+npm run lint
+npm run test        # Vitest unit tests
+npm run test:e2e    # Playwright smoke suite
+npm run build
+```
 
 ## Why API Lab
 
