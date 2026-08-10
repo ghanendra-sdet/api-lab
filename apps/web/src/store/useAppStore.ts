@@ -1,8 +1,18 @@
 import { create } from "zustand";
 import type { HttpMethod, KeyValueRow, RequestPanelId, ThemeMode } from "@api-lab/shared";
+import {
+  BrowserFetchExecutor,
+  buildRequest,
+  validateJsonBody,
+  validateUrl,
+  type ApiResponseResult,
+  type ValidationError,
+} from "@api-lab/request-engine";
 import type { Collection, EnvironmentOption, RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab, seedCollections } from "../lib/seedData";
+
+const executor = new BrowserFetchExecutor();
 
 function getPreferredTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";
@@ -55,6 +65,15 @@ interface AppState {
   setPreRequestScript: (tabId: string, script: string) => void;
   setPostResponseScript: (tabId: string, script: string) => void;
   setTestsScript: (tabId: string, script: string) => void;
+
+  // Request execution
+  requestStatus: Record<string, "idle" | "loading">;
+  responses: Record<string, ApiResponseResult | undefined>;
+  sendErrors: Record<string, ValidationError | undefined>;
+  abortControllers: Record<string, AbortController>;
+  sendRequest: (tabId: string) => Promise<void>;
+  cancelRequest: (tabId: string) => void;
+  resetRequest: (tabId: string) => void;
 }
 
 function newRow(): KeyValueRow {
@@ -73,7 +92,7 @@ function updateTab(
 
 const initialTab = createInitialTab();
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
@@ -166,6 +185,77 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { postResponseScript }) })),
   setTestsScript: (tabId, testsScript) =>
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { testsScript }) })),
+
+  requestStatus: {},
+  responses: {},
+  sendErrors: {},
+  abortControllers: {},
+
+  sendRequest: async (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    const urlError = validateUrl(tab.url);
+    if (urlError) {
+      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: urlError } }));
+      return;
+    }
+    const bodyError = validateJsonBody(tab.bodyMode, tab.bodyRawFormat, tab.bodyRawContent);
+    if (bodyError) {
+      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: bodyError } }));
+      return;
+    }
+
+    set((s) => ({
+      sendErrors: { ...s.sendErrors, [tabId]: undefined },
+      requestStatus: { ...s.requestStatus, [tabId]: "loading" },
+    }));
+
+    const controller = new AbortController();
+    set((s) => ({ abortControllers: { ...s.abortControllers, [tabId]: controller } }));
+
+    const built = buildRequest({
+      id: tab.id,
+      name: tab.name,
+      method: tab.method,
+      url: tab.url,
+      queryParams: tab.params,
+      headers: tab.headers,
+      authType: tab.authType,
+      bodyMode: tab.bodyMode,
+      bodyRawFormat: tab.bodyRawFormat,
+      bodyRawContent: tab.bodyRawContent,
+    });
+
+    const result = await executor.execute(built, { signal: controller.signal });
+
+    set((s) => {
+      const remainingControllers = { ...s.abortControllers };
+      delete remainingControllers[tabId];
+      return {
+        responses: { ...s.responses, [tabId]: result },
+        requestStatus: { ...s.requestStatus, [tabId]: "idle" },
+        abortControllers: remainingControllers,
+      };
+    });
+  },
+
+  cancelRequest: (tabId) => {
+    get().abortControllers[tabId]?.abort();
+  },
+
+  resetRequest: (tabId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, {
+        params: [],
+        headers: [],
+        authType: "none",
+        bodyMode: "none",
+        bodyRawContent: "",
+      }),
+      responses: { ...s.responses, [tabId]: undefined },
+      sendErrors: { ...s.sendErrors, [tabId]: undefined },
+    })),
 }));
 
 export function useActiveTab(): RequestTabState {

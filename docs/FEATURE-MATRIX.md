@@ -11,34 +11,48 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 |---|---:|---:|---|
 | Sidebar navigation (collections tree) | P0 | 1 | Done |
 | Request tabs (multi-request workspace) | P0 | 1 | Done |
-| Response panel | P0 | 1 | Done (empty state only — real response rendering is Milestone 2) |
+| Response panel | P0 | 1 | Done (real response rendering shipped in Milestone 2) |
 | Light/dark theme | P1 | 1 | Done |
 | Responsive layout (usable down to tablet width) | P1 | 1 | Done |
 
 ## Request Building
 
-_Method selection, the URL bar, and the Params/Headers/Body editors have UI in place as of Milestone 1, but nothing is wired to real HTTP execution yet — "Send" shows a not-yet-available notice. Status below reflects execution, per Milestone 2's actual scope._
-
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| GET | P0 | 2 | Planned |
-| POST | P0 | 2 | Planned |
-| PUT | P0 | 2 | Planned |
-| PATCH | P0 | 2 | Planned |
-| DELETE | P0 | 2 | Planned |
-| HEAD | P1 | 2 | Planned |
-| OPTIONS | P1 | 2 | Planned |
-| Query parameters (with enable/disable) | P0 | 2 | UI in place (Milestone 1); not yet wired to execution |
+| GET | P0 | 2 | Done |
+| POST | P0 | 2 | Done |
+| PUT | P0 | 2 | Done |
+| PATCH | P0 | 2 | Done |
+| DELETE | P0 | 2 | Done |
+| HEAD | P1 | 2 | Done (no body sent, per HTTP spec) |
+| OPTIONS | P1 | 2 | Done |
+| Query parameters (with enable/disable) | P0 | 2 | Done |
 | Path parameters (auto-detected) | P0 | 2 | Planned |
-| Headers editor (with enable/disable) | P0 | 2 | UI in place (Milestone 1); not yet wired to execution |
+| Headers editor (with enable/disable) | P0 | 2 | Done |
 | Cookies (per-domain jar) | P1 | 2 | Planned |
-| Body: raw JSON | P0 | 2 | UI in place (Milestone 1, Monaco editor); not yet wired to execution |
-| Body: raw XML | P1 | 2 | Planned |
+| Body: raw JSON | P0 | 2 | Done (Monaco editor, JSON validation before send) |
+| Body: raw XML / Text / HTML | P1 | 2 | Done (sent as raw text with the matching Content-Type; no XML/HTML validation) |
 | Body: form-data (multipart) | P0 | 2 | Planned |
 | Body: x-www-form-urlencoded | P0 | 2 | Planned |
 | Body: binary/file upload | P1 | 2 | Planned |
-| Send request / view response | P0 | 2 | Planned |
+| Send request / view response | P0 | 2 | Done (via `BrowserFetchExecutor` / native fetch) |
+| Request cancellation | P1 | 2 | Done (`AbortController`) |
+| Request reset ("Clear") | P1 | 2 | Done |
 | Request history | P1 | 2 | Planned |
+
+## Response Handling
+
+| Feature | Priority | Phase | Status |
+|---|---:|---:|---|
+| Status code + text display | P0 | 2 | Done |
+| Response timing | P0 | 2 | Done |
+| Response size | P1 | 2 | Done (content-length header when present, else decoded byte length — see docs/ARCHITECTURE.md known limitations) |
+| Pretty JSON viewer | P0 | 2 | Done (Monaco, read-only) |
+| Raw response viewer | P0 | 2 | Done |
+| Response headers viewer | P0 | 2 | Done |
+| Empty response (204) handling | P0 | 2 | Done |
+| Non-JSON response handling (text/HTML) | P0 | 2 | Done (HTML always shown as inert text, never rendered) |
+| Network/CORS/timeout error handling | P0 | 2 | Done (friendly message; browser doesn't distinguish CORS vs. network failure — see known limitations) |
 
 ## Collections
 

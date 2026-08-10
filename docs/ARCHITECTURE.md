@@ -44,7 +44,25 @@ The structure above is the **agreed target**, established now so every later mil
 
 `apps/web`'s internal structure follows `components/{layout,collections,request,response,common}` + `store/` (Zustand) + `types/` + `lib/`. State: a single Zustand store (`useAppStore`) holds cross-cutting UI state — open tabs, each tab's full editable request state, theme, environment selection, sidebar visibility — because Milestone 1 itself needed it (sidebar, tabs, request bar, and six config panels all read/write the same tab state; prop-drilling across that many siblings was the alternative, not a simpler one).
 
-**Known limitation carried forward**: `@monaco-editor/react` (used for the raw-body JSON editor) defaults to loading Monaco's assets from a CDN (jsdelivr) at runtime rather than the bundled npm package — inconsistent with the zero-install/self-contained goal and an unreviewed third-party runtime dependency. Flagged in code (`apps/web/src/components/request/BodyPanel.tsx`) as a fix-before-relying-on-it item: self-host the Monaco assets and point the loader locally.
+**Known limitation carried forward**: `@monaco-editor/react` (used for the raw-body JSON editor) defaults to loading Monaco's assets from a CDN (jsdelivr) at runtime rather than the bundled npm package — inconsistent with the zero-install/self-contained goal and an unreviewed third-party runtime dependency. Flagged in code (`apps/web/src/components/request/BodyPanel.tsx`) as a fix-before-relying-on-it item: self-host the Monaco assets and point the loader locally. Still open as of Milestone 2.
+
+### As built — Milestone 2
+
+`packages/request-engine` now exists — the first real engine package, pure TypeScript with no DOM/React runtime dependency beyond `fetch`/`Headers`/`AbortController` type surfaces (typed via TS's `DOM` lib, no actual browser runtime coupling). Exposes:
+
+- `buildUrl` / `buildHeaders` / `buildBody` / `buildRequest` — pure functions turning a `KeyValueRow[]`-based request config into a real `{ url, method, headers, body }`. Never overrides a user-set header (e.g. a user-set `Content-Type` beats the one implied by the chosen body format).
+- `validateUrl` / `validateJsonBody` — pre-send validation (empty/malformed/unsupported-protocol URL; invalid JSON body), run before anything is sent.
+- `RequestExecutor` interface + `BrowserFetchExecutor` — the only implementation this milestone; sends real requests via native `fetch`, supports `AbortSignal` cancellation, and converts thrown errors (network failure, CORS rejection, abort) into a normalized, friendly result rather than letting them propagate as exceptions.
+- `normalizeResponse` — turns a raw `Response` into `ApiResponseResult` (status, headers, body, rawBody, duration, size, bodyKind). Classifies body content (`json`/`text`/`html`/`empty`) but never executes or renders it — HTML is always shown as text, everywhere in the UI.
+
+`apps/web`'s `useAppStore` gained per-tab `requestStatus`/`responses`/`sendErrors`/`abortControllers` state and a `sendRequest`/`cancelRequest`/`resetRequest` action set that orchestrates the engine: validate → build → execute → normalize → store. The response viewer (`components/response/*`) reuses the same Monaco instance pattern as the request body editor (read-only, for the Pretty JSON view) rather than introducing a second rendering approach.
+
+**Transport abstraction, not just an implementation**: `RequestExecutor` is deliberately an interface, not a hardcoded `fetch()` call in the store. `MockExecutor` (Milestone 9) and `PerformanceExecutor` (Milestone 10) implement the same interface later without the store's `sendRequest` orchestration changing.
+
+**New known limitations**:
+- **CORS**: API Lab is browser-only in Milestone 2 — a real external API that doesn't send permissive CORS headers will reject the browser's request, and the browser's `fetch()` reports this identically to a plain network failure (no way to distinguish "CORS rejected" from "DNS failed" from "connection refused" — this is a deliberate browser security restriction, not something JavaScript can introspect). The error message reflects this ambiguity honestly rather than guessing. `docs/ROADMAP.md`'s planned `ServerExecutor` (a controlled execution layer) is the architectural answer, not something this milestone works around.
+- **Response size** is exact only when the server sends a `Content-Length` header; otherwise it's the decoded body's byte length, which will not match compressed/chunked wire size. `ApiResponseResult.sizeSource` states which case applies rather than presenting a single number as always-exact.
+- **Cookies**: the response viewer's Cookies tab is a structural placeholder, not wired up — browsers don't expose `Set-Cookie` response header values to JavaScript for security reasons, so this needs its own design before Milestone 2's UI-parity claim would be accurate; deferred rather than faked.
 
 ### Why a monorepo
 

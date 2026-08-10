@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./useAppStore";
+import { createEmptyTab } from "../lib/seedData";
 
 function resetStore() {
-  const initialTabs = useAppStore.getState().tabs.slice(0, 1);
+  const freshTab = createEmptyTab();
   useAppStore.setState({
-    tabs: initialTabs,
-    activeTabId: initialTabs[0]!.id,
+    tabs: [freshTab],
+    activeTabId: freshTab.id,
     theme: "light",
     environment: "none",
     sidebarCollapsed: false,
