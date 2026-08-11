@@ -87,14 +87,19 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| No Auth | P0 | 5 | Planned |
-| API Key | P0 | 5 | Planned |
-| Basic Auth | P0 | 5 | Planned |
-| Bearer Token | P0 | 5 | Planned |
-| JWT (decode/inspect) | P1 | 5 | Planned |
-| OAuth 2.0 (authorization code) | P1 | 5 | Planned |
-| OAuth 2.0 (client credentials) | P1 | 5 | Planned |
-| Auth inheritance (collection → request) | P1 | 5 | Planned |
+| No Auth | P0 | 5 | Done |
+| API Key (header) | P0 | 5 | Done |
+| API Key (query parameter) | P0 | 5 | Done |
+| Basic Auth | P0 | 5 | Done |
+| Bearer Token | P0 | 5 | Done |
+| JWT Bearer | P1 | 5 | Done (bearer-token execution with JWT-specific UX; no decode/inspect or signing) |
+| Variable integration (`{{token}}` etc. in auth fields) | P0 | 5 | Done |
+| Auth/manual-header precedence | P0 | 5 | Done (auth-generated header/param wins on a name collision — see docs/ARCHITECTURE.md) |
+| Auth persistence + pre-Milestone-5 backward compatibility | P0 | 5 | Done |
+| OAuth 2.0 (authorization code) | P1 | 5 | Deferred (architecture documented, not implemented — see docs/ARCHITECTURE.md and docs/SECURITY.md) |
+| OAuth 2.0 (client credentials) | P1 | 5 | Deferred (architecture documented, not implemented) |
+| OAuth 2.0 (PKCE, device code, refresh token) | P1 | 5 | Deferred (architecture documented, not implemented) |
+| Auth inheritance (collection → request) | P1 | 5 | Deferred (documented future model, not implemented — see docs/ARCHITECTURE.md) |
 
 ## Import / Export
 

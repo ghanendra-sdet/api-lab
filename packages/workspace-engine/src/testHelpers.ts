@@ -6,7 +6,7 @@ export function sampleRequestConfig(overrides: Partial<RequestConfig> = {}): Req
     url: "https://example.com/users",
     params: [],
     headers: [],
-    authType: "none",
+    auth: { type: "none" },
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",

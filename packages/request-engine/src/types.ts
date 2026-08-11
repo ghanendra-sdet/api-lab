@@ -26,7 +26,7 @@ export interface BuiltRequest {
 }
 
 export interface ValidationError {
-  field: "url" | "body" | "variables";
+  field: "url" | "body" | "variables" | "auth";
   message: string;
 }
 

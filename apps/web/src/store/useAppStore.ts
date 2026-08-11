@@ -44,11 +44,13 @@ import {
   type EnvironmentWorkspace,
   type Variable,
 } from "@api-lab/environment-engine";
+import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
 import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
+import { resolveAuthConfig } from "../lib/authResolve";
 import {
   loadEnvironmentsFromStorage,
   loadTabsFromStorage,
@@ -188,7 +190,7 @@ interface AppState {
   removeHeaderRow: (tabId: string, rowId: string) => void;
 
   // Auth / Body / Scripts
-  setAuthType: (tabId: string, authType: RequestTabState["authType"]) => void;
+  setAuth: (tabId: string, auth: AuthConfig) => void;
   setBodyMode: (tabId: string, bodyMode: RequestTabState["bodyMode"]) => void;
   setBodyRawFormat: (tabId: string, format: RequestTabState["bodyRawFormat"]) => void;
   setBodyRawContent: (tabId: string, content: string) => void;
@@ -465,7 +467,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       })),
     })),
 
-  setAuthType: (tabId, authType) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { authType }) })),
+  setAuth: (tabId, auth) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { auth }) })),
   setBodyMode: (tabId, bodyMode) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { bodyMode }) })),
   setBodyRawFormat: (tabId, bodyRawFormat) =>
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { bodyRawFormat }) })),
@@ -525,6 +527,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const resolved = resolution.resolved;
 
+    // Auth fields (API key value, username/password, bearer/JWT token) can
+    // also reference {{variables}} — resolve them through the same
+    // environment context before validating or applying the auth config.
+    const authResolution = resolveAuthConfig(tab.auth, context);
+    if (authResolution.hasCircularReference) {
+      set((s) => ({
+        sendErrors: {
+          ...s.sendErrors,
+          [tabId]: {
+            field: "variables",
+            message: "Circular variable reference detected in the authorization configuration.",
+          },
+        },
+      }));
+      return;
+    }
+    if (authResolution.unresolvedVariables.length > 0) {
+      set((s) => ({
+        sendErrors: {
+          ...s.sendErrors,
+          [tabId]: {
+            field: "variables",
+            message: `Unresolved variable${authResolution.unresolvedVariables.length > 1 ? "s" : ""} in authorization: ${authResolution.unresolvedVariables.join(", ")}.`,
+          },
+        },
+      }));
+      return;
+    }
+
+    const authError = validateAuthConfig(authResolution.resolved);
+    if (authError) {
+      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: authError } }));
+      return;
+    }
+
+    // Auth-generated headers/params take precedence over manually entered
+    // ones with the same name — see auth-engine's applyAuth docstring for
+    // the documented precedence rule.
+    const withAuth = applyAuth(authResolution.resolved, resolved.headers, resolved.params);
+
     const urlError = validateUrl(resolved.url);
     if (urlError) {
       set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: urlError } }));
@@ -549,9 +591,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       name: tab.name,
       method: tab.method,
       url: resolved.url,
-      queryParams: resolved.params,
-      headers: resolved.headers,
-      authType: tab.authType,
+      queryParams: withAuth.params,
+      headers: withAuth.headers,
+      authType: tab.auth.type,
       bodyMode: tab.bodyMode,
       bodyRawFormat: tab.bodyRawFormat,
       bodyRawContent: resolved.bodyRawContent,
@@ -579,7 +621,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       tabs: updateTab(s.tabs, tabId, {
         params: [],
         headers: [],
-        authType: "none",
+        auth: { type: "none" },
         bodyMode: "none",
         bodyRawContent: "",
       }),

@@ -1,11 +1,11 @@
 import type {
-  AuthType,
   BodyMode,
   BodyRawFormat,
   HttpMethod,
   KeyValueRow,
   RequestPanelId,
 } from "@api-lab/shared";
+import type { AuthConfig } from "@api-lab/auth-engine";
 import type { RequestConfig, RequestLocation } from "@api-lab/workspace-engine";
 
 /** The full editable state of one open request tab. */
@@ -17,7 +17,7 @@ export interface RequestTabState {
   activePanel: RequestPanelId;
   params: KeyValueRow[];
   headers: KeyValueRow[];
-  authType: AuthType;
+  auth: AuthConfig;
   bodyMode: BodyMode;
   bodyRawFormat: BodyRawFormat;
   bodyRawContent: string;

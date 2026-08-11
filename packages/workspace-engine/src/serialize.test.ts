@@ -80,3 +80,48 @@ describe("deserializeWorkspace error handling", () => {
     expect(() => deserializeWorkspace({ version: 1 })).not.toThrow();
   });
 });
+
+describe("Milestone 5 backward compatibility: pre-auth saved requests", () => {
+  it("loads a request saved before Milestone 5 (old authType field, no auth field) and defaults to No Auth", () => {
+    const legacyPersisted = {
+      version: 1,
+      workspace: {
+        collections: [
+          {
+            id: "c1",
+            name: "Legacy Collection",
+            items: [
+              {
+                id: "r1",
+                type: "request",
+                name: "Old Request",
+                request: {
+                  method: "GET",
+                  url: "https://example.com",
+                  params: [],
+                  headers: [],
+                  // Old field from Milestones 2-4 — no `auth` field at all.
+                  authType: "bearer",
+                  bodyMode: "none",
+                  bodyRawFormat: "JSON",
+                  bodyRawContent: "",
+                },
+                createdAt: "2024-01-01T00:00:00.000Z",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              },
+            ],
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const result = deserializeWorkspace(legacyPersisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const request = result.workspace.collections[0]!.items[0];
+      expect(request && "request" in request && request.request.auth).toEqual({ type: "none" });
+    }
+  });
+});

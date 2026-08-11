@@ -6,7 +6,7 @@ function config(overrides: Partial<RequestConfig>): RequestConfig {
     url: "",
     params: [],
     headers: [],
-    authType: "none",
+    auth: { type: "none" },
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",

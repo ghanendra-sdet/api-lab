@@ -1,18 +1,26 @@
-import type { AuthType, BodyMode, BodyRawFormat, HttpMethod, KeyValueRow } from "@api-lab/shared";
+import type { BodyMode, BodyRawFormat, HttpMethod, KeyValueRow } from "@api-lab/shared";
+import type { AuthConfig } from "@api-lab/auth-engine";
 
 /**
  * The persisted, request-engine-agnostic shape of a request's configuration.
- * Deliberately excludes scripts/tests/auth-execution/environment fields —
- * those belong to their own milestones and are not part of the collection
- * format yet (see docs/ROADMAP.md). Designed so those fields can be added
- * later without breaking existing saved data (additive, optional fields).
+ * Deliberately excludes scripts/tests/environment fields — those belong to
+ * their own milestones and are not part of the collection format yet (see
+ * docs/ROADMAP.md). Designed so those fields can be added later without
+ * breaking existing saved data (additive, optional fields).
+ *
+ * `auth` replaces Milestone 2–4's cosmetic `authType: AuthType` field
+ * (which never actually affected a sent request — the Auth panel was a
+ * placeholder until this milestone). Saved requests from before Milestone 5
+ * have no `auth` field at all; schema.ts defaults it to `{ type: "none" }`
+ * on load rather than attempting to reconstruct real credentials that were
+ * never stored — see docs/ARCHITECTURE.md's Milestone 5 section.
  */
 export interface RequestConfig {
   method: HttpMethod;
   url: string;
   params: KeyValueRow[];
   headers: KeyValueRow[];
-  authType: AuthType;
+  auth: AuthConfig;
   bodyMode: BodyMode;
   bodyRawFormat: BodyRawFormat;
   bodyRawContent: string;

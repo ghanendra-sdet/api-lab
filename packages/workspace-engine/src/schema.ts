@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { AUTH_TYPES, BODY_MODES, BODY_RAW_FORMATS, HTTP_METHODS } from "@api-lab/shared";
+import { BODY_MODES, BODY_RAW_FORMATS, HTTP_METHODS } from "@api-lab/shared";
+import { authConfigSchema } from "@api-lab/auth-engine";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
-const authTypeSchema = z.enum([...AUTH_TYPES]);
 const bodyModeSchema = z.enum([...BODY_MODES]);
 const bodyRawFormatSchema = z.enum([...BODY_RAW_FORMATS]);
 
@@ -19,7 +19,12 @@ const requestConfigSchema = z.object({
   url: z.string(),
   params: z.array(keyValueRowSchema),
   headers: z.array(keyValueRowSchema),
-  authType: authTypeSchema,
+  // Backward compatibility (Milestone 5): requests saved before this
+  // milestone have no `auth` field (only the old cosmetic `authType`
+  // string, which is simply dropped here — zod strips unrecognized keys by
+  // default). Since no real credentials were ever stored under the old
+  // field, the only safe reconstruction is "No Auth" — see types.ts.
+  auth: authConfigSchema.default({ type: "none" }),
   bodyMode: bodyModeSchema,
   bodyRawFormat: bodyRawFormatSchema,
   bodyRawContent: z.string(),

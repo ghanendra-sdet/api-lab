@@ -59,11 +59,34 @@ Environment variables — including those flagged `secret` — are resolved and 
 - **Prototype-pollution resistant.** Because a variable's `key` is arbitrary user text, the resolver's context objects are built with `Object.create(null)` and checked with `Object.hasOwn` rather than `{}` and the `in` operator — so a variable named `__proto__` or `constructor` can neither crash the resolver nor reach `Object.prototype`. See `docs/ARCHITECTURE.md`'s Milestone 4 section for the specific mechanism and its regression tests.
 - **Corrupt-storage recovery never silently discards secrets.** Like the workspace envelope, a corrupt/invalid `api-lab-environments` value is left untouched in storage until the user explicitly confirms "Reset Local Environments" — never overwritten automatically.
 
+## Authentication Configuration & Credentials (Milestone 5)
+
+Requests can now carry API Key/Basic/Bearer/JWT credentials directly (`auth-engine`'s `AuthConfig`), in addition to environment variables. The same limitations documented above for environment secrets apply identically here, plus:
+
+- **Never logged.** No code path in `auth-engine`, `authResolve.ts`, or `useAppStore.sendRequest` passes a resolved credential (API key value, password, bearer/JWT token) or a generated `Authorization` header to `console.log`/`console.error`/`console.warn`. Validation errors reference field *names* ("Bearer token is required") never values.
+- **Never in error messages.** `validateAuthConfig`'s messages describe what's missing, never echo back a partial or full credential value.
+- **Masked in the UI.** `AuthPanel` renders API key value, password, and bearer/JWT token fields as `type="password"` by default, with a single Show/Hide toggle per panel — never revealed by default, never split across multiple separately-persisted "reveal" states that could leak via browser autofill/history in unexpected ways.
+- **Resolved only at send time.** Auth field variable resolution (`resolveAuthConfig`) happens in the same place and at the same time as URL/header/body resolution — immediately before `buildRequest` — never earlier, never cached, never written back into the saved request.
+- **Saved data always keeps the unresolved form.** A saved request's `auth.token` stays `{{token}}`; the resolved credential exists only as a local variable inside `sendRequest`'s execution, never persisted.
+- **Deterministic, non-executable interpolation.** Auth field resolution reuses `environment-engine`'s `resolveVariables` — pure string substitution, the same `eval`/`new Function`-free guarantee documented above for environment variables, with the same prototype-pollution hardening (a variable named `__proto__` used inside a token field is exactly as safe as anywhere else it can appear).
+- **Auth-generated headers/params are not distinguishable from manual ones after the fact** (both are just `KeyValueRow`s by the time `request-engine` sees them) — this is intentional per the milestone's own request-engine boundary requirement, and does not weaken any of the above, since the *value* going into that header was already resolved under all the same rules.
+
 ## Credential Handling
 
 - No production credentials are ever committed to the repository (enforced by `.gitignore` and code review — see `CLAUDE.md`).
-- Locally stored secrets (API keys, tokens the user enters) are stored in the browser's local persistence layer, scoped per-collection/environment, never logged, and never included in an exported collection unless the user explicitly opts in to exporting secrets (off by default).
-- OAuth token exchange, once implemented (Milestone 5), keeps tokens in memory/local storage only — never transmitted anywhere except the configured token endpoint and the API requests that need them.
+- Locally stored secrets (API keys, tokens the user enters, or environment variables flagged secret) are stored in the browser's local persistence layer (`localStorage`, plaintext — see "Environment Variables & Secrets" above for the concrete limitations), never logged, and never included in an exported collection unless the user explicitly opts in to exporting secrets (off by default, once export exists — Milestone 6).
+- **OAuth 2.0 is not implemented** (see "OAuth 2.0 — Deferred, With Requirements" below). `{type: "oauth2"}` is a reserved, non-executable `AuthConfig` variant — `validateAuthConfig` always blocks it from being sent, so the UI never claims functionality that doesn't exist.
+
+## OAuth 2.0 — Deferred, With Requirements
+
+OAuth 2.0 support is architecturally reserved (`AuthConfig`'s `oauth2` variant, `docs/ARCHITECTURE.md`'s Milestone 5 section) but **not implemented**. This was a deliberate scope decision, not an oversight — implementing even a "minimal" flow without the below would mean either a fake/broken feature or an insecure shortcut, both explicitly disallowed. Before any OAuth implementation begins, it needs its own milestone covering:
+
+- **Flow choice**: Authorization Code + PKCE for a pure-browser public client (never a bare Authorization Code flow with a client secret embedded in shipped frontend code — a browser app cannot keep a secret confidential). Client Credentials and Device Authorization are separate, narrower use cases that would need their own UX.
+- **Redirect URI**: a dedicated, documented callback route, with CSRF-safe `state` parameter validation on return — new product surface, not a corner of `auth-engine`.
+- **Token storage**: an access/refresh token obtained via OAuth is exactly as exposed in `localStorage` as any other secret documented above — this must be stated plainly in-product when implemented, never implied to be more secure because it came from an OAuth exchange.
+- **Refresh handling**: silent refresh on expiry, single retry, explicit re-auth prompt on refresh failure — a real state machine, not an afterthought.
+- **CORS**: the token endpoint must support CORS for a pure-browser exchange; many providers don't allow this for public clients, which is an external constraint, not something client-side code can route around (see the Milestone 2 CORS note in `docs/ARCHITECTURE.md` and the planned `ServerExecutor`).
+- **No insecure shortcuts, ever**: never embed a client secret in shipped code, never skip PKCE for a public client, never store a token without documenting the plaintext-localStorage tradeoff.
 
 ## Import Validation
 

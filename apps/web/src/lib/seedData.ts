@@ -10,7 +10,7 @@ export function createEmptyTab(overrides: Partial<RequestTabState> = {}): Reques
     activePanel: "params",
     params: [],
     headers: [],
-    authType: "none",
+    auth: { type: "none" },
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",
