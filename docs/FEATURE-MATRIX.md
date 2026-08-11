@@ -158,13 +158,22 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Define mock endpoints | P0 | 9 | Planned |
-| Custom response body/headers | P0 | 9 | Planned |
-| Status-code scenarios (full set) | P0 | 9 | Planned |
-| Named scenario presets | P1 | 9 | Planned |
-| Configurable latency | P1 | 9 | Planned |
-| Error/timeout simulation | P1 | 9 | Planned |
-| Malformed-response simulation | P2 | 9 | Planned |
+| Define mock endpoints | P0 | 9 | Done (method + path with `:param` segments, GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS) |
+| Custom response body/headers | P0 | 9 | Done (JSON/text body, custom headers, constrained `{{...}}` templating) |
+| Status-code scenarios (full set) | P0 | 9 | Done (15 presets: 200/201/202/204/400/401/403/404/409/422/429/500/502/503/504 — editable, not hardcoded) |
+| Named scenario presets | P1 | 9 | Done (multiple named scenarios per route; switch the active one without a restart) |
+| Configurable latency | P1 | 9 | Done (per-scenario delay, 0–30,000ms, enforced server-side) |
+| Error/timeout simulation | P1 | 9 | Done (via status-code presets and delay; no artificial connection-drop/timeout simulation beyond delay) |
+| Malformed-response simulation | P2 | 9 | Deferred — not part of Milestone 9's explicit scope |
+| Real standalone server (`apps/mock-server`) | P0 | 9 | Done (Fastify, real TCP port, independent of the browser) |
+| Query parameter inspection | P1 | 9 | Done (`{{query.name}}` in response templates) |
+| Request body matching (route to scenario by payload) | P2 | 9 | Deferred — evaluated, not implemented; scenario selection is manual/active-scenario based, not payload-driven |
+| Request logging (method/path/status/duration) | P1 | 9 | Done (in-memory, 200-entry ring buffer; never logs bodies or Authorization/Cookie headers) |
+| Route/scenario persistence + corruption recovery | P0 | 9 | Done (versioned, Zod-validated JSON file on the server's own filesystem, not the browser) |
+| Runner integration (mock as a real collection target) | P0 | 9 | Done |
+| Environment integration (`{{mockBaseUrl}}`) | P0 | 9 | Done |
+| OpenAPI → Mock Route generation | P2 | Future | Deferred — route model kept adapter-friendly, no adapter built yet |
+| Mock server management authentication | P1 | Future | Explicit non-goal for Milestone 9 — local dev tooling trust model, revisit before any hosted deployment |
 
 ## Performance Engine
 

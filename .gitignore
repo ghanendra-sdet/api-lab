@@ -37,3 +37,6 @@ test-results/
 
 # Misc
 *.local
+
+# Mock server persisted route data (server-local, not source-controlled)
+apps/mock-server/data/*.json

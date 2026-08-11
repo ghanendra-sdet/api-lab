@@ -24,5 +24,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },
+    {
+      command: "node ../mock-server/src/index.ts",
+      url: "http://localhost:4010/__mock/status",
+      reuseExistingServer: !process.env.CI,
+      timeout: 15_000,
+      env: { MOCK_SERVER_PORT: "4010", MOCK_SERVER_DATA_FILE: "../mock-server/data/mock-routes.e2e.json" },
+    },
   ],
 });
