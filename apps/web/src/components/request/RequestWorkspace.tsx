@@ -9,6 +9,7 @@ import { BodyPanel } from "./BodyPanel";
 import { ScriptsPanel } from "./ScriptsPanel";
 import { TestsPanel } from "./TestsPanel";
 import { ResponsePanel } from "../response/ResponsePanel";
+import { ContractPanel } from "../contract/ContractPanel";
 
 export function RequestWorkspace() {
   const tab = useActiveTab();
@@ -26,6 +27,7 @@ export function RequestWorkspace() {
           {tab.activePanel === "body" && <BodyPanel tab={tab} />}
           {tab.activePanel === "scripts" && <ScriptsPanel tab={tab} />}
           {tab.activePanel === "tests" && <TestsPanel tab={tab} />}
+          {tab.activePanel === "contract" && <ContractPanel tab={tab} />}
         </div>
         <ResponsePanel />
       </div>

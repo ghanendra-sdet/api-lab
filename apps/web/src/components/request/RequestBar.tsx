@@ -19,6 +19,8 @@ export function RequestBar({ tab }: RequestBarProps) {
   const saveTab = useAppStore((s) => s.saveTab);
   const status = useAppStore((s) => s.requestStatus[tab.id] ?? "idle");
   const sendError = useAppStore((s) => s.sendErrors[tab.id]);
+  const contractValidationEnabled = useAppStore((s) => s.contractValidationEnabled);
+  const setContractValidationEnabled = useAppStore((s) => s.setContractValidationEnabled);
   const activeEnvironment = useActiveEnvironment();
   const isLoading = status === "loading";
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -92,6 +94,24 @@ export function RequestBar({ tab }: RequestBarProps) {
         >
           {isLinked ? (dirty ? "Save*" : "Save") : "Save"}
         </button>
+        {/* Contract validation toggle (spec §28), deliberately inline in the
+            existing row rather than on a line of its own: an extra row here
+            shortens the response viewport for every user, whether or not they
+            use contract testing. Off by default — an ordinary request must
+            never be slowed or blocked by validation nobody asked for. */}
+        <label
+          title="Validate the response against the attached OpenAPI contract"
+          className="ml-2 flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-neutral-200 px-3 text-sm font-medium text-neutral-600 dark:border-neutral-800 dark:text-neutral-300"
+        >
+          <input
+            type="checkbox"
+            aria-label="Validate against contract"
+            checked={contractValidationEnabled}
+            onChange={(e) => setContractValidationEnabled(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-neutral-300 text-blue-600 dark:border-neutral-700"
+          />
+          Contract
+        </label>
       </div>
       {showSaveDialog && <SaveRequestDialog tabId={tab.id} onClose={() => setShowSaveDialog(false)} />}
       {preview && (

@@ -51,6 +51,8 @@ export type RequestPanelId =
   | "headers"
   | "body"
   | "scripts"
-  | "tests";
+  | "tests"
+  /** Milestone 11: OpenAPI contract validation for this request. */
+  | "contract";
 
 export type ThemeMode = "light" | "dark";

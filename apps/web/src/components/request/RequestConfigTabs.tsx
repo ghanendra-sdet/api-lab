@@ -9,6 +9,7 @@ const PANELS: { id: RequestPanelId; label: string }[] = [
   { id: "body", label: "Body" },
   { id: "scripts", label: "Scripts" },
   { id: "tests", label: "Tests" },
+  { id: "contract", label: "Contract" },
 ];
 
 export function RequestConfigTabs({ tab }: { tab: RequestTabState }) {

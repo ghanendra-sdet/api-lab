@@ -2,7 +2,14 @@ import { useMemo, useRef, useState } from "react";
 import type { Collection } from "@api-lab/workspace-engine";
 import { parseDataset } from "@api-lab/runner-engine";
 import { useAppStore } from "../../store/useAppStore";
-import { flattenCollectionRequests, summarizeRunner, type RunnerItemStatus } from "../../lib/runner";
+import {
+  flattenCollectionRequests,
+  summarizeRunner,
+  summarizeRunnerContract,
+  type RunnerItemStatus,
+} from "../../lib/runner";
+import { ContractViolationList } from "../contract/ContractViolationList";
+import { findSpecificationForCollection, useContractStore } from "../../store/useContractStore";
 
 interface RunnerDialogProps {
   collection: Collection;
@@ -15,6 +22,7 @@ const STATUS_LABEL: Record<RunnerItemStatus, string> = {
   passed: "Passed",
   failed: "Failed",
   error: "Error",
+  "contract-failed": "Contract Failed",
   skipped: "Skipped",
   cancelled: "Cancelled",
 };
@@ -25,13 +33,14 @@ const STATUS_CLASS: Record<RunnerItemStatus, string> = {
   passed: "text-green-700 dark:text-green-400",
   failed: "text-red-700 dark:text-red-400",
   error: "text-red-700 dark:text-red-400",
+  "contract-failed": "text-red-700 dark:text-red-400",
   skipped: "text-neutral-400 dark:text-neutral-600",
   cancelled: "text-amber-700 dark:text-amber-400",
 };
 
 function statusIcon(status: RunnerItemStatus): string {
   if (status === "passed") return "✓";
-  if (status === "failed" || status === "error") return "✗";
+  if (status === "failed" || status === "error" || status === "contract-failed") return "✗";
   if (status === "running") return "…";
   return "○";
 }
@@ -42,6 +51,9 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const runnerDataset = useAppStore((s) => s.runnerDataset);
   const runnerDatasetName = useAppStore((s) => s.runnerDatasetName);
   const setRunnerDataset = useAppStore((s) => s.setRunnerDataset);
+  const runnerValidateContract = useAppStore((s) => s.runnerValidateContract);
+  const setRunnerValidateContract = useAppStore((s) => s.setRunnerValidateContract);
+  const contracts = useContractStore((s) => s.contracts);
   const startRunner = useAppStore((s) => s.startRunner);
   const cancelRunner = useAppStore((s) => s.cancelRunner);
   const resetRunner = useAppStore((s) => s.resetRunner);
@@ -57,6 +69,8 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const isRunning = runnerState.status === "running";
   const hasResults = runnerState.status === "completed" || runnerState.status === "cancelled";
   const summary = summarizeRunner(runnerState);
+  const contractSummary = summarizeRunnerContract(runnerState);
+  const boundSpecification = findSpecificationForCollection(contracts, collection.id);
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -150,6 +164,27 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                 Stop on failure
               </label>
 
+              {/* Contract validation for the run (spec §29). Only offered
+                  when this collection actually has a specification bound to
+                  it — an unbound collection has nothing to validate against. */}
+              <label className="mb-3 flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={runnerValidateContract}
+                  disabled={!boundSpecification}
+                  onChange={(e) => setRunnerValidateContract(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 text-blue-600 disabled:opacity-50 dark:border-neutral-700"
+                />
+                Validate contract after response
+                {boundSpecification ? (
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">({boundSpecification.name})</span>
+                ) : (
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    (bind a specification to this collection first)
+                  </span>
+                )}
+              </label>
+
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Dataset (optional)
               </p>
@@ -220,6 +255,15 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                   {summary.total}
                   {runnerState.durationMs !== undefined && ` · Duration: ${(runnerState.durationMs / 1000).toFixed(1)}s`}
                 </p>
+                {runnerState.validateContract && (
+                  <p
+                    data-testid="runner-contract-summary"
+                    className="mt-1 border-t border-neutral-100 pt-1 text-neutral-600 dark:border-neutral-800 dark:text-neutral-300"
+                  >
+                    Contract — Passed: {contractSummary.passed} · Failed: {contractSummary.failed} · Warnings:{" "}
+                    {contractSummary.warnings}
+                  </p>
+                )}
               </div>
 
               {runnerState.iterations.map((iteration) => {
@@ -271,6 +315,34 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                                       </li>
                                     ))}
                                   </ul>
+                                )}
+                                {item.contractResult && (
+                                  <div className="mt-2 border-t border-neutral-100 pt-2 dark:border-neutral-900">
+                                    <p
+                                      className={`font-semibold ${
+                                        item.contractResult.valid
+                                          ? "text-green-700 dark:text-green-400"
+                                          : "text-red-700 dark:text-red-400"
+                                      }`}
+                                    >
+                                      <span aria-hidden="true">{item.contractResult.valid ? "✓" : "✗"}</span> Contract:{" "}
+                                      {item.contractResult.valid ? "PASS" : "FAIL"}
+                                      {item.contractResult.operation && (
+                                        <span className="ml-1 font-mono font-normal text-neutral-500 dark:text-neutral-400">
+                                          {item.contractResult.operation.method} {item.contractResult.operation.path}
+                                        </span>
+                                      )}
+                                    </p>
+                                    <ContractViolationList
+                                      violations={item.contractResult.requestViolations}
+                                      label="Request contract"
+                                    />
+                                    <ContractViolationList
+                                      violations={item.contractResult.responseViolations}
+                                      label="Response contract"
+                                    />
+                                    <ContractViolationList violations={item.contractResult.warnings} label="Warnings" />
+                                  </div>
                                 )}
                                 {item.extractionResults && item.extractionResults.length > 0 && (
                                   <ul className="mt-1 space-y-0.5">

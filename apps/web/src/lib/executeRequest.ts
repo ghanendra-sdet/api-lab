@@ -10,9 +10,15 @@ import { buildVariableContext, resolveRequestConfig, type Environment } from "@a
 import { applyAuth, validateAuthConfig } from "@api-lab/auth-engine";
 import { evaluateAssertions, buildTestResult, type TestResult } from "@api-lab/test-engine";
 import { extractAll, mergeResolutionContext, type ExtractionResult } from "@api-lab/runner-engine";
+import {
+  validateContract,
+  type ContractModel,
+  type ContractValidationResult,
+} from "@api-lab/contract-engine";
 import type { RequestConfig } from "@api-lab/workspace-engine";
 import { resolveAuthConfig } from "./authResolve";
 import { resolveAssertions } from "./resolveAssertions";
+import { buildContractRequestInput } from "./contractAdapt";
 
 /** Shared, stateless HTTP transport — used by both the request-tab "Send"
  * path and the Collection Runner, so there is exactly one execution
@@ -30,6 +36,32 @@ export interface ExecuteRequestResult {
    * (tab Send or the Runner) decides how long these live. Never persisted. */
   extractedVariables?: Record<string, string>;
   extractionResults?: ExtractionResult[];
+  /**
+   * Contract validation outcome, present only when a contract was supplied.
+   * Kept entirely separate from `testResult` so a contract violation is never
+   * collapsed into an ordinary assertion failure (spec §29).
+   */
+  contractResult?: ContractValidationResult;
+}
+
+/**
+ * Contract validation settings for one execution (spec §28, §7).
+ *
+ * Two independent switches, matching the two things the milestone asks for:
+ *
+ * - `validateResponse` is the ordinary "[✓] Validate against contract" case:
+ *   send as usual, then check what came back.
+ * - `validateRequestBeforeSend` is the pre-flight check. Spec §12 is explicit
+ *   that when request validation is enabled an invalid request "must fail
+ *   before sending", so enabling it *blocks* the request rather than
+ *   reporting after the fact. It is off by default, because silently
+ *   refusing to send would be a surprising default for a tool whose job is
+ *   sending requests.
+ */
+export interface ContractExecutionOptions {
+  contract: ContractModel;
+  validateResponse: boolean;
+  validateRequestBeforeSend: boolean;
 }
 
 export interface ExecutionScopes {
@@ -54,6 +86,7 @@ export async function executeRequestConfig(
   config: RequestConfig,
   scopes: ExecutionScopes,
   signal?: AbortSignal,
+  contractOptions?: ContractExecutionOptions,
 ): Promise<ExecuteRequestResult> {
   const context = mergeResolutionContext({
     environment: buildVariableContext(scopes.environment),
@@ -128,6 +161,37 @@ export async function executeRequestConfig(
     bodyRawContent: resolved.bodyRawContent,
   });
 
+  // ---------------------------------------------------------------------
+  // Contract validation (Milestone 11)
+  //
+  // Positioned here deliberately. Everything above has already resolved
+  // variables, applied authorization, and built the final request, so the
+  // contract is checked against what will actually go on the wire — never
+  // against an unresolved `{{userId}}` placeholder, which spec §31 forbids.
+  // ---------------------------------------------------------------------
+  const contractRequestInput = contractOptions
+    ? buildContractRequestInput(
+        contractOptions.contract,
+        config.method,
+        built.url,
+        built.headers,
+        withAuth.params,
+        built.body,
+      )
+    : null;
+
+  if (contractOptions?.validateRequestBeforeSend && contractRequestInput) {
+    const preflight = validateContract(contractOptions.contract, contractRequestInput, undefined, {
+      skipResponse: true,
+    });
+    if (preflight.requestViolations.length > 0) {
+      // Spec §12: an invalid request fails *before* being sent. Reported as
+      // an ordinary execution outcome carrying the contract result, so the
+      // caller renders violations rather than a bare error string.
+      return { ok: true, contractResult: preflight };
+    }
+  }
+
   const response = await executor.execute(built, { signal });
 
   const resolvedAssertions = resolveAssertions(config.tests, context);
@@ -136,5 +200,17 @@ export async function executeRequestConfig(
 
   const { variables: extractedVariables, results: extractionResults } = extractAll(config.extractions, response);
 
-  return { ok: true, response, testResult, extractedVariables, extractionResults };
+  let contractResult: ContractValidationResult | undefined;
+  if (contractOptions && contractRequestInput) {
+    contractResult = validateContract(
+      contractOptions.contract,
+      contractRequestInput,
+      contractOptions.validateResponse
+        ? { status: response.status, headers: response.headers, rawBody: response.rawBody }
+        : undefined,
+      { skipRequest: !contractOptions.validateRequestBeforeSend },
+    );
+  }
+
+  return { ok: true, response, testResult, extractedVariables, extractionResults, contractResult };
 }

@@ -70,6 +70,7 @@ describe("summarizeRunner", () => {
       environmentId: null,
       stopOnFailure: true,
       datasetName: null,
+      validateContract: false,
       iterations: iterationsItems.map((items, index) => ({ index, data: {}, items })),
     };
   }

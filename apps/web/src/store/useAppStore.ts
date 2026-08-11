@@ -43,13 +43,15 @@ import type {
 } from "@api-lab/collection-format";
 import { createAssertion, type Assertion, type TestResult } from "@api-lab/test-engine";
 import { createExtraction, type Dataset, type Extraction, type ExtractionResult } from "@api-lab/runner-engine";
+import type { ContractValidationResult } from "@api-lab/contract-engine";
 import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
 import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
-import { executeRequestConfig } from "../lib/executeRequest";
+import { executeRequestConfig, type ContractExecutionOptions } from "../lib/executeRequest";
+import { findSpecificationForCollection, getContractModel, useContractStore } from "./useContractStore";
 import {
   flattenCollectionRequests,
   createIdleRunnerState,
@@ -231,6 +233,15 @@ interface AppState {
   extractionResults: Record<string, ExtractionResult[] | undefined>;
   sendErrors: Record<string, ValidationError | undefined>;
   abortControllers: Record<string, AbortController>;
+  /** Per-tab contract validation outcomes (Milestone 11). Never persisted —
+   * a result describes one exchange that already happened. */
+  contractResults: Record<string, ContractValidationResult | undefined>;
+  /** "[✓] Validate against contract" next to Send (spec §28). */
+  contractValidationEnabled: boolean;
+  setContractValidationEnabled: (enabled: boolean) => void;
+  /** Pre-flight request validation, which blocks the send (spec §7, §12). */
+  contractRequestValidationEnabled: boolean;
+  setContractRequestValidationEnabled: (enabled: boolean) => void;
   /** Runtime variables extracted from responses, scoped per tab — never
    * persisted, cleared on tab close or Clear. Lets a tab manually chain
    * "Send A, then reference {{extractedVar}} in B" without a Runner. */
@@ -245,6 +256,9 @@ interface AppState {
   runnerDataset: Dataset | null;
   runnerDatasetName: string | null;
   setRunnerDataset: (dataset: Dataset | null, name: string | null) => void;
+  /** "Validate contract after response" in the Runner (spec §29). */
+  runnerValidateContract: boolean;
+  setRunnerValidateContract: (enabled: boolean) => void;
   startRunner: (
     collectionId: string,
     requestIds: string[],
@@ -271,6 +285,38 @@ function updateTab(
 
 function sameLocation(a: RequestLocation, b: RequestLocation): boolean {
   return a.collectionId === b.collectionId && a.folderId === b.folderId;
+}
+
+
+/**
+ * Resolves which specification a request should be validated against, and
+ * builds the execution options from it.
+ *
+ * A saved request inherits the specification bound to its collection
+ * (spec §26); anything else falls back to the specification explicitly
+ * selected in the Contract panel. Returning `undefined` — no attached
+ * specification, or one that no longer parses — means validation is simply
+ * skipped, never that an ordinary request is blocked (spec §28).
+ */
+function buildContractOptions(
+  collectionId: string | undefined,
+  validateResponse: boolean,
+  validateRequestBeforeSend: boolean,
+): { options: ContractExecutionOptions | undefined; specId: string | null } {
+  if (!validateResponse && !validateRequestBeforeSend) return { options: undefined, specId: null };
+
+  const contractState = useContractStore.getState();
+  const specification =
+    findSpecificationForCollection(contractState.contracts, collectionId) ??
+    contractState.contracts.specifications.find((spec) => spec.id === contractState.activeSpecificationId);
+
+  const contract = getContractModel(specification);
+  if (!contract || !specification) return { options: undefined, specId: null };
+
+  return {
+    options: { contract, validateResponse, validateRequestBeforeSend },
+    specId: specification.id,
+  };
 }
 
 const initial = loadInitialState();
@@ -596,6 +642,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   tabRuntimeVariables: {},
   sendErrors: {},
   abortControllers: {},
+  contractResults: {},
+  contractValidationEnabled: false,
+  setContractValidationEnabled: (enabled) => set({ contractValidationEnabled: enabled }),
+  contractRequestValidationEnabled: false,
+  setContractRequestValidationEnabled: (enabled) => set({ contractRequestValidationEnabled: enabled }),
 
   sendRequest: async (tabId) => {
     const state = get();
@@ -614,13 +665,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     const controller = new AbortController();
     set((s) => ({ abortControllers: { ...s.abortControllers, [tabId]: controller } }));
 
+    const contract = buildContractOptions(
+      tab.savedLocation?.collectionId,
+      state.contractValidationEnabled,
+      state.contractRequestValidationEnabled,
+    );
+
     const outcome = await executeRequestConfig(
       tab.id,
       tab.name,
       tabToRequestConfig(tab),
       { environment: activeEnvironment, runtime: state.tabRuntimeVariables[tabId] ?? {} },
       controller.signal,
+      contract.options,
     );
+
+    // Coverage counts operations that were actually exercised this session
+    // (spec §37) — recorded only when an operation genuinely resolved.
+    if (contract.specId && outcome.contractResult?.operation) {
+      useContractStore.getState().recordValidatedOperation(contract.specId, outcome.contractResult.operation.id);
+    }
 
     set((s) => {
       const remainingControllers = { ...s.abortControllers };
@@ -634,6 +698,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
       }
 
+      // A blocked pre-flight (spec §12) returns a contract result with no
+      // response. Surface the violations without clearing the previous
+      // response, which was never replaced.
+      if (!outcome.response) {
+        return {
+          contractResults: { ...s.contractResults, [tabId]: outcome.contractResult },
+          requestStatus: { ...s.requestStatus, [tabId]: "idle" },
+          abortControllers: remainingControllers,
+        };
+      }
+
       const nextRuntimeVariables = outcome.extractedVariables
         ? { ...s.tabRuntimeVariables[tabId], ...outcome.extractedVariables }
         : s.tabRuntimeVariables[tabId];
@@ -642,6 +717,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         responses: { ...s.responses, [tabId]: outcome.response },
         testResults: { ...s.testResults, [tabId]: outcome.testResult },
         extractionResults: { ...s.extractionResults, [tabId]: outcome.extractionResults },
+        contractResults: { ...s.contractResults, [tabId]: outcome.contractResult },
         requestStatus: { ...s.requestStatus, [tabId]: "idle" },
         abortControllers: remainingControllers,
         tabRuntimeVariables: { ...s.tabRuntimeVariables, [tabId]: nextRuntimeVariables ?? {} },
@@ -670,6 +746,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         responses: { ...s.responses, [tabId]: undefined },
         testResults: { ...s.testResults, [tabId]: undefined },
         extractionResults: { ...s.extractionResults, [tabId]: undefined },
+        contractResults: { ...s.contractResults, [tabId]: undefined },
         sendErrors: { ...s.sendErrors, [tabId]: undefined },
         tabRuntimeVariables: remainingRuntimeVariables,
       };
@@ -680,6 +757,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   runnerDataset: null,
   runnerDatasetName: null,
   setRunnerDataset: (dataset, name) => set({ runnerDataset: dataset, runnerDatasetName: name }),
+  runnerValidateContract: false,
+  setRunnerValidateContract: (enabled) => set({ runnerValidateContract: enabled }),
 
   startRunner: async (collectionId, requestIds, environmentId, stopOnFailure) => {
     const state = get();
@@ -690,6 +769,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const flat = flattenCollectionRequests(collection).filter((r) => requested.has(r.id));
     const environment = state.environments.environments.find((e) => e.id === environmentId);
     const dataset = state.runnerDataset;
+    // The Runner validates against the specification bound to the collection
+    // being run (spec §26/§29), never against whatever the request workspace
+    // happens to have selected.
+    const contract = buildContractOptions(collectionId, state.runnerValidateContract, false);
     // A dataset-less run is exactly one iteration with an empty data row —
     // the common case looks identical to Milestone 7's single-pass runner.
     const iterationRows = dataset && dataset.rows.length > 0 ? dataset.rows : [{}];
@@ -703,6 +786,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         environmentId,
         stopOnFailure,
         datasetName: state.runnerDatasetName,
+        validateContract: contract.options !== undefined,
         iterations: iterationRows.map((data, index) => ({
           index,
           data,
@@ -746,23 +830,48 @@ export const useAppStore = create<AppState>((set, get) => ({
           req.request,
           { environment, runtime, iteration: iterationData },
           controller.signal,
+          contract.options,
         );
         if (controller.signal.aborted) break outer;
 
-        const itemStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
+        if (contract.specId && outcome.contractResult?.operation) {
+          useContractStore.getState().recordValidatedOperation(contract.specId, outcome.contractResult.operation.id);
+        }
+
+        // A contract violation is its own failure reason, tracked separately
+        // from assertion outcomes so the Runner can report them distinctly
+        // rather than collapsing both into one ambiguous "failed" (spec §29).
+        const assertionStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
+        const contractFailed = outcome.contractResult !== undefined && !outcome.contractResult.valid;
+        // A contract failure surfaces whenever the assertions themselves did
+        // not fail — including when a request has no assertions at all, whose
+        // assertion status is "skipped". An earlier version only promoted
+        // "passed", which silently hid every contract violation on the very
+        // requests most likely to rely on contract testing instead of
+        // hand-written assertions. A genuine assertion failure or execution
+        // error keeps its own status, since that is the more specific reason
+        // and the contract result stays attached to the item either way.
+        const itemStatus =
+          contractFailed && (assertionStatus === "passed" || assertionStatus === "skipped")
+            ? "contract-failed"
+            : assertionStatus;
+
         setItem(iterationIndex, req.id, {
           status: itemStatus,
           response: outcome.response,
           testResult: outcome.testResult,
           validationError: outcome.validationError,
           extractionResults: outcome.extractionResults,
+          contractResult: outcome.contractResult,
         });
 
         if (outcome.ok && outcome.extractedVariables) {
           runtime = { ...runtime, ...outcome.extractedVariables };
         }
 
-        if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error")) break outer;
+        if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error" || itemStatus === "contract-failed")) {
+          break outer;
+        }
       }
     }
 

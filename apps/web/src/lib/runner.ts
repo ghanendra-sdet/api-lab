@@ -2,6 +2,7 @@ import { isFolder, isRequest, type Collection, type RequestConfig, type RequestL
 import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine";
 import type { TestResult } from "@api-lab/test-engine";
 import type { ExtractionResult } from "@api-lab/runner-engine";
+import type { ContractValidationResult } from "@api-lab/contract-engine";
 
 export interface RunnableRequest {
   id: string;
@@ -32,7 +33,23 @@ export function flattenCollectionRequests(collection: Collection): RunnableReque
   return result;
 }
 
-export type RunnerItemStatus = "pending" | "running" | "passed" | "failed" | "error" | "skipped" | "cancelled";
+/**
+ * `contract-failed` (Milestone 11) is a distinct status, not a flavour of
+ * `failed`. Spec §29 requires contract failures to appear separately from
+ * ordinary assertion failures rather than being collapsed into one ambiguous
+ * reason — a request whose assertions all passed but whose response broke
+ * the contract is a genuinely different result from one whose assertions
+ * failed, and the Runner has to be able to say which happened.
+ */
+export type RunnerItemStatus =
+  | "pending"
+  | "running"
+  | "passed"
+  | "failed"
+  | "error"
+  | "contract-failed"
+  | "skipped"
+  | "cancelled";
 
 export interface RunnerItemResult {
   requestId: string;
@@ -42,6 +59,8 @@ export interface RunnerItemResult {
   testResult?: TestResult;
   validationError?: ValidationError;
   extractionResults?: ExtractionResult[];
+  /** Present only when the run had contract validation enabled. */
+  contractResult?: ContractValidationResult;
 }
 
 /** One pass through the collection's requests — either the single implicit
@@ -64,6 +83,8 @@ export interface RunnerState {
   environmentId: string | null;
   stopOnFailure: boolean;
   datasetName: string | null;
+  /** Whether this run validated responses against a contract (spec §29). */
+  validateContract: boolean;
   iterations: RunnerIterationResult[];
   startedAt?: number;
   durationMs?: number;
@@ -76,6 +97,7 @@ export function createIdleRunnerState(): RunnerState {
     environmentId: null,
     stopOnFailure: true,
     datasetName: null,
+    validateContract: false,
     iterations: [],
   };
 }
@@ -92,10 +114,48 @@ export function summarizeRunner(
     for (const item of iteration.items) {
       total += 1;
       if (item.status === "passed") passed += 1;
-      else if (item.status === "failed") failed += 1;
+      // A contract failure counts in the `failed` total — the run did not
+      // pass — while remaining distinguishable via the contract summary
+      // below and the per-item status.
+      else if (item.status === "failed" || item.status === "contract-failed") failed += 1;
       else if (item.status === "error") errors += 1;
       else if (item.status === "skipped" || item.status === "cancelled" || item.status === "pending") skipped += 1;
     }
   }
   return { passed, failed, errors, skipped, total, iterations: state.iterations.length };
+}
+
+export interface RunnerContractSummary {
+  /** Requests whose contract validation ran and produced no violations. */
+  passed: number;
+  /** Requests with at least one contract violation. */
+  failed: number;
+  /** Total contract warnings across the run — never folded into passed. */
+  warnings: number;
+  /** Requests for which contract validation actually ran. */
+  validated: number;
+}
+
+/**
+ * The Runner's contract summary block (spec §30), reported alongside — never
+ * merged into — the assertion summary above.
+ */
+export function summarizeRunnerContract(state: RunnerState): RunnerContractSummary {
+  let passed = 0;
+  let failed = 0;
+  let warnings = 0;
+  let validated = 0;
+
+  for (const iteration of state.iterations) {
+    for (const item of iteration.items) {
+      const result = item.contractResult;
+      if (!result) continue;
+      validated += 1;
+      warnings += result.warnings.length;
+      if (result.valid) passed += 1;
+      else failed += 1;
+    }
+  }
+
+  return { passed, failed, warnings, validated };
 }
