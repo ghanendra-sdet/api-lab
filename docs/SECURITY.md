@@ -88,9 +88,19 @@ OAuth 2.0 support is architecturally reserved (`AuthConfig`'s `oauth2` variant, 
 - **CORS**: the token endpoint must support CORS for a pure-browser exchange; many providers don't allow this for public clients, which is an external constraint, not something client-side code can route around (see the Milestone 2 CORS note in `docs/ARCHITECTURE.md` and the planned `ServerExecutor`).
 - **No insecure shortcuts, ever**: never embed a client secret in shipped code, never skip PKCE for a public client, never store a token without documenting the plaintext-localStorage tradeoff.
 
-## Import Validation
+## Import Validation & Untrusted External Files (Milestone 6)
 
-- Postman and OpenAPI imports are parsed through `collection-format`'s Zod schemas before any data reaches application state. A structurally invalid or unexpected import is rejected with a clear error, not partially absorbed.
+Imported files (Postman Collections, Postman Environments, OpenAPI documents, API Lab native exports) are the first genuinely **untrusted, externally-authored** input this application processes — unlike environment/auth values, which the user themselves types in, an import file could come from anywhere. It's treated accordingly:
+
+- **Size limit before parsing.** A file over 5MB (`MAX_IMPORT_FILE_SIZE_BYTES`) is rejected before `JSON.parse` is ever called on it — a large file can't even reach the parser, let alone freeze the tab.
+- **Schema-validated before any adapter runs.** Every format is parsed through a Zod schema (`postmanCollectionSchema`, `postmanEnvironmentSchema`, `openApiDocumentSchema`, `nativeExportSchema`) before an adapter touches it. A structurally invalid or unrecognized shape is rejected with a clear, specific error — never partially absorbed into application state.
+- **Bounded against pathological recursion.** Postman folder-flattening and OpenAPI/Postman's own recursive zod schemas walk the document's structure; a maliciously deep — but still under the 5MB limit — document could exhaust the JS call stack (`RangeError: Maximum call stack size exceeded`), which is not something `zod`'s `safeParse` catches on its own. `parseImportFile`'s top-level try/catch converts this into an ordinary typed failure result instead of an uncaught exception. Verified by a regression test using a 50,000-level-deep fixture.
+- **Scripts are never executed, evaluated, or rendered.** Postman's `event[].script.exec` content is counted (for the "N scripts not imported" warning) and nowhere else — it is never assigned to any field of the resulting `RequestConfig`, never passed to `eval`, `new Function`, or any equivalent, and never reaches a DOM-rendering path. There is no code path in `collection-format` by which an imported script's text could execute.
+- **No HTML/markup from an import is ever rendered as HTML.** Collection/folder/request names, descriptions, and header/body content from an import are plain strings rendered through React's default escaping — identical treatment to any other user-entered text, per the XSS Prevention section above.
+- **Never `eval()`/`new Function()`/`dangerouslySetInnerHTML` for imported content**, anywhere in `collection-format` or the import/export UI — confirmed by direct code search as part of this milestone's security review.
+- **Preview before commit.** No import is applied to the workspace until the user reviews a preview (name, item/variable counts, every warning) and explicitly clicks Import — an import can never silently or automatically alter existing data.
+- **Non-destructive collision handling.** A name collision with an existing collection/environment gets a distinguishing suffix (`"X (Imported)"`), never a silent overwrite.
+- **Export never leaks internal execution state.** `exportPostmanCollection`/`exportNativeWorkspace` are pure functions over `workspace-engine`/`environment-engine` domain types, which structurally cannot contain React state, `AbortController`s, in-flight request status, or response history — there is nothing to accidentally serialize, because the exporters never see it in the first place.
 
 ## Review Cadence
 

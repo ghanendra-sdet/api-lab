@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { isFolder, isRequest, type Collection } from "@api-lab/workspace-engine";
+import { exportPostmanCollection } from "@api-lab/collection-format";
 import { useAppStore } from "../../store/useAppStore";
+import { downloadJson, slugifyFilename } from "../../lib/importExport";
 import { RequestItem } from "./RequestItem";
 import { FolderItem } from "./FolderItem";
 
@@ -38,6 +40,11 @@ export function CollectionItem({ collection }: CollectionItemProps) {
   function handleNewRequest() {
     const name = window.prompt("Request name", "New Request");
     if (name && name.trim()) saveNewRequest(activeTabId, { collectionId: collection.id }, name.trim());
+  }
+
+  function handleExportPostman() {
+    const data = exportPostmanCollection(collection);
+    downloadJson(`${slugifyFilename(collection.name)}.postman_collection.json`, data);
   }
 
   return (
@@ -90,6 +97,15 @@ export function CollectionItem({ collection }: CollectionItemProps) {
             className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             +
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPostman}
+            aria-label={`Export ${collection.name} as Postman`}
+            title="Export as Postman Collection"
+            className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            ⇩
           </button>
           <button
             type="button"

@@ -1,15 +1,27 @@
+import { useState } from "react";
+import { exportNativeWorkspace } from "@api-lab/collection-format";
 import { useAppStore } from "../../store/useAppStore";
+import { downloadJson } from "../../lib/importExport";
 import { CollectionItem } from "./CollectionItem";
+import { ImportDialog } from "../importExport/ImportDialog";
 
 export function CollectionSidebar() {
   const collections = useAppStore((s) => s.workspace.collections);
+  const workspace = useAppStore((s) => s.workspace);
+  const environments = useAppStore((s) => s.environments);
   const workspaceLoadError = useAppStore((s) => s.workspaceLoadError);
   const createCollection = useAppStore((s) => s.createCollection);
   const resetWorkspace = useAppStore((s) => s.resetWorkspace);
+  const [importOpen, setImportOpen] = useState(false);
 
   function handleNewCollection() {
     const name = window.prompt("Collection name", "New Collection");
     if (name && name.trim()) createCollection(name.trim());
+  }
+
+  function handleExportWorkspace() {
+    const data = exportNativeWorkspace(workspace, environments);
+    downloadJson("api-lab-workspace.json", data);
   }
 
   return (
@@ -41,15 +53,32 @@ export function CollectionSidebar() {
         </div>
       )}
 
-      <div className="px-2">
+      <div className="flex items-center gap-1 px-2">
         <button
           type="button"
           onClick={handleNewCollection}
-          className="mb-2 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+          className="mb-2 flex flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
         >
           <span aria-hidden="true">+</span> New Collection
         </button>
+        <button
+          type="button"
+          onClick={() => setImportOpen(true)}
+          className="mb-2 rounded px-2 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900"
+        >
+          Import
+        </button>
+        <button
+          type="button"
+          onClick={handleExportWorkspace}
+          aria-label="Export workspace"
+          title="Export entire workspace (API Lab native format)"
+          className="mb-2 rounded px-2 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900"
+        >
+          Export
+        </button>
       </div>
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
 
       {collections.length === 0 ? (
         <div className="px-4 py-6 text-center text-sm text-neutral-400 dark:text-neutral-600">

@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Payment API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "url": { "raw": "{{baseUrl}}/login" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Deeply Nested",
+          "item": [
+            {
+              "name": "Get User By Id",
+              "request": {
+                "method": "GET",
+                "url": { "raw": "{{baseUrl}}/users/1" }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Basic Auth Request",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "alice" },
+                { "key": "password", "value": "wonderland" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/me" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bearer Request",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{token}}" }]
+        },
+        "url": { "raw": "{{baseUrl}}/protected" }
+      }
+    },
+    {
+      "name": "API Key Request",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "apikey",
+          "apikey": [
+            { "key": "key", "value": "X-API-Key" },
+            { "key": "value", "value": "{{apiKey}}" },
+            { "key": "in", "value": "header" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/data" }
+      }
+    },
+    {
+      "name": "Unsupported Auth Request",
+      "request": {
+        "method": "GET",
+        "auth": { "type": "oauth2" },
+        "url": { "raw": "{{baseUrl}}/oauth-protected" }
+      }
+    },
+    {
+      "name": "Request With Script",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": { "exec": ["pm.environment.set('token', 'abc');"] }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/scripted" }
+      }
+    },
+    {
+      "name": "Form Data Request",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "value": "avatar.png" },
+            { "key": "caption", "value": "Profile picture" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/upload" }
+      }
+    }
+  ]
+}

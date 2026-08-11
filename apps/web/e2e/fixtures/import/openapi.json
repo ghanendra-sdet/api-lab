@@ -1,0 +1,14 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "E2E OpenAPI" },
+  "servers": [{ "url": "http://localhost:4001" }],
+  "paths": {
+    "/echo": {
+      "get": {
+        "summary": "Echo Get",
+        "tags": ["Echo"],
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

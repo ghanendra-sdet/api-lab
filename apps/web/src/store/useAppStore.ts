@@ -45,12 +45,18 @@ import {
   type Variable,
 } from "@api-lab/environment-engine";
 import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
+import type {
+  NormalizedCollectionImport,
+  NormalizedEnvironmentImport,
+  NormalizedWorkspaceImport,
+} from "@api-lab/collection-format";
 import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
 import { resolveAuthConfig } from "../lib/authResolve";
+import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
 import {
   loadEnvironmentsFromStorage,
   loadTabsFromStorage,
@@ -165,6 +171,11 @@ interface AppState {
   moveSavedRequest: (from: RequestLocation, to: RequestLocation, requestId: string) => void;
   moveItemUp: (location: RequestLocation, itemId: string) => void;
   moveItemDown: (location: RequestLocation, itemId: string) => void;
+
+  // Import (Postman / OpenAPI / API Lab native) — see @api-lab/collection-format
+  importCollection: (normalized: NormalizedCollectionImport) => string;
+  importEnvironment: (normalized: NormalizedEnvironmentImport) => string;
+  importNativeWorkspace: (normalized: NormalizedWorkspaceImport) => void;
 
   // Tabs
   tabs: RequestTabState[];
@@ -351,6 +362,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   moveItemUp: (location, itemId) => set((s) => ({ workspace: wsMoveItemUp(s.workspace, location, itemId) })),
   moveItemDown: (location, itemId) =>
     set((s) => ({ workspace: wsMoveItemDown(s.workspace, location, itemId) })),
+
+  importCollection: (normalized) => {
+    const { workspace, collectionId } = applyCollectionImport(get().workspace, normalized);
+    set({ workspace });
+    return collectionId;
+  },
+  importEnvironment: (normalized) => {
+    const { workspace, environmentId } = applyEnvironmentImport(get().environments, normalized);
+    set({ environments: workspace });
+    return environmentId;
+  },
+  importNativeWorkspace: (normalized) => {
+    let workspace = get().workspace;
+    let environments = get().environments;
+    for (const collection of normalized.collections) {
+      workspace = applyCollectionImport(workspace, collection).workspace;
+    }
+    for (const environment of normalized.environments) {
+      environments = applyEnvironmentImport(environments, environment).workspace;
+    }
+    set({ workspace, environments });
+  },
 
   tabs: initial.tabs,
   activeTabId: initial.activeTabId,

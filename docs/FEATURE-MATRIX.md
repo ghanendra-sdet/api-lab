@@ -105,11 +105,17 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Import Postman Collection (v2.1) | P0 | 6 | Planned |
-| Import OpenAPI (JSON) | P1 | 6 | Planned |
-| Import OpenAPI (YAML) | P1 | 6 | Planned |
-| Export API Lab native format | P0 | 6 | Planned |
-| Export Postman-compatible format | P1 | 6 | Planned |
+| Import Postman Collection (v2.1) | P0 | 6 | Done (folders flattened one level with a warning; unsupported auth/body/scripts preserved-or-warned, never faked) |
+| Import Postman Environment | P0 | 6 | Done |
+| Import OpenAPI (JSON) | P1 | 6 | Done (3.0.x and 3.1.x; grouped by first tag; JSON request bodies via example/examples) |
+| Import OpenAPI (YAML) | P1 | 6 | Deferred (JSON only this milestone — see docs/ARCHITECTURE.md) |
+| Import API Lab native workspace export | P0 | 6 | Done |
+| Import preview + explicit confirm (never auto-applies) | P0 | 6 | Done |
+| Import validation (schema, size limit, malformed/deeply-nested input) | P0 | 6 | Done (5MB limit; recursive-parse exceptions caught, never crash the app) |
+| Import collision handling (non-destructive rename) | P0 | 6 | Done |
+| Export API Lab native format | P0 | 6 | Done (versioned, deterministic, round-trip tested) |
+| Export Postman-compatible format | P1 | 6 | Done (Postman Collection v2.1 JSON; round-trip tested through API Lab's own importer) |
+| Insomnia / Bruno / HAR / curl import | P2 | 6 | Deferred (parser-isolation boundary designed to allow this later — see docs/ARCHITECTURE.md) |
 
 ## Testing Engine
 

@@ -1,0 +1,15 @@
+{
+  "info": {
+    "name": "E2E Variable Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Echo With Env",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/echo" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "E2E Environment",
+  "_postman_variable_scope": "environment",
+  "values": [
+    { "key": "baseUrl", "value": "http://localhost:4001", "enabled": true, "type": "default" }
+  ]
+}

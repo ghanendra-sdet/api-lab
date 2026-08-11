@@ -1,0 +1,33 @@
+{
+  "info": {
+    "name": "E2E Partial Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Good Request",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "http://localhost:4001/echo" }
+      }
+    },
+    {
+      "name": "Unsupported Auth Request",
+      "request": {
+        "method": "GET",
+        "auth": { "type": "oauth2" },
+        "url": { "raw": "http://localhost:4001/echo" }
+      }
+    },
+    {
+      "name": "Scripted Request",
+      "event": [
+        { "listen": "prerequest", "script": { "exec": ["console.log('hi')"] } }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "http://localhost:4001/echo" }
+      }
+    }
+  ]
+}

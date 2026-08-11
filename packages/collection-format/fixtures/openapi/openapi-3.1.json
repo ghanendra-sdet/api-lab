@@ -1,0 +1,26 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Notes API" },
+  "servers": [{ "url": "https://notes.example.com" }],
+  "paths": {
+    "/notes": {
+      "get": {
+        "summary": "List notes",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/notes/{noteId}": {
+      "delete": {
+        "summary": "Delete note",
+        "parameters": [{ "name": "noteId", "in": "path", "required": true }],
+        "security": [{ "apiKeyAuth": [] }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+    }
+  }
+}

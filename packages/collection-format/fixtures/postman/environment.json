@@ -1,0 +1,9 @@
+{
+  "name": "Development",
+  "_postman_variable_scope": "environment",
+  "values": [
+    { "key": "baseUrl", "value": "https://dev.example.com", "enabled": true, "type": "default" },
+    { "key": "token", "value": "dev-secret-token", "enabled": true, "type": "secret" },
+    { "key": "disabledVar", "value": "unused", "enabled": false, "type": "default" }
+  ]
+}

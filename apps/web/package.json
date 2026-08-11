@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@api-lab/auth-engine": "*",
+    "@api-lab/collection-format": "*",
     "@api-lab/environment-engine": "*",
     "@api-lab/request-engine": "*",
     "@api-lab/shared": "*",
