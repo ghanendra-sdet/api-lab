@@ -88,19 +88,27 @@ Milestones are sequential checkpoints. Per `CLAUDE.md`'s Development Workflow, e
 
 **Status**: Complete. Shipped `packages/mock-engine` (route matching, response templating, dataset-free — pure primitives, no HTTP/Node dependency) and `apps/mock-server` (a real, standalone Fastify server — the browser cannot open a listening port itself, so this had to be a separate process, per the milestone's own explicit architectural constraint). Routes support `GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS`, literal + `:param` path segments (static routes always win over parameterized ones on a conflict), multiple named scenarios per route with 15 built-in status-code presets (fully editable, not hardcoded), a constrained `{{path.x}}`/`{{query.x}}`/`{{header.x}}`/`{{timestamp}}`/`{{requestId}}` response-templating mechanism (never `eval`/`new Function`), a per-scenario delay (0–30s, enforced), custom response headers, and a 200-entry request log (method/path/status/duration only — never bodies or `Authorization`/`Cookie`). Route/scenario definitions persist server-side in a versioned, Zod-validated JSON file with corruption recovery — deliberately not in the browser's `localStorage`, so the server stays usable from a CLI/CI/self-hosted context with zero browser involvement. API Lab's web UI gained a "Mock Server" manager (status/start/stop, a route editor, a request log viewer) that talks to the server's admin HTTP API — it never spawns or embeds the process. The mock server integrates with the existing product exactly like any real HTTP target: the Collection Runner can run a saved collection against it (switching a scenario from 200→500 flips a Runner assertion from pass to fail, demonstrating the regression-testing value), and its URL works through a normal `{{mockBaseUrl}}` environment variable, never hardcoded. 19 new `mock-engine` unit tests, 19 new `mock-server` integration tests (a real listening server, real `fetch()` calls — never a mocked transport), and 12 new Playwright E2E scenarios (server status, route creation + real request, scenario switching, path parameters, custom headers, delay, unmatched/disabled routes, request logging, a full assertion-based integration, Runner integration, and environment-variable integration) — plus the full Milestone 2–8 regression suite (74 E2E tests), unmodified in intent, still passing.
 
-## Milestone 10 — Performance Engine
+## Milestone 10 — Performance Engine ✅
 
 - Virtual users, concurrency, duration, ramp-up
 - Metrics: RPS, avg, P50/P90/P95/P99, error rate, status distribution
 - Performance reports
 
-## Milestone 11 — Documentation Generation
+**Status**: Complete. Shipped `packages/performance-engine` (pure configuration/limits/percentile/aggregation/threshold/report primitives — no React, no DOM, no `node:` imports, because it runs unchanged in both the browser and a Node worker thread) and `apps/performance-worker` (a Fastify control plane on port 4020 that spawns a `worker_threads` Worker per run). Load is never generated in the browser: spec §2 forbids it, and a browser tab's per-host connection cap, CORS, and shared render thread would make any number it produced misleading. The four candidate architectures were evaluated against measurable constraints before implementation and the choice is recorded in `docs/ARCHITECTURE.md`'s Milestone 10 section, including the empirical check that Node 24's TypeScript type-stripping applies to Worker entry points — which is what let the worker follow `apps/mock-server`'s no-build-step convention exactly. Supports single-request and whole-collection targets, fixed-concurrency and fixed-rate load models, duration, ramp-up, think time, per-request timeouts, and cancellation. Virtual users loop the target with a runtime-variable map created fresh per user per iteration, so M8 request chaining works under load and one VU's extracted token can never reach another's request. Environment resolution and API Key / Basic / Bearer / JWT authorization happen browser-side at execution time, so the worker receives only finished header values — never an environment or a credential store. Metrics cover total/successful/failed/aborted requests, error rate, completed and successful RPS (labelled separately, never conflated), byte throughput, min/max/avg and P50/P90/P95/P99 latency by documented nearest-rank percentile, a bounded status-code distribution, a seven-way error classification (4xx / 5xx / timeout / network / connection / cancelled / client), and a per-second time series. Live metrics stream over SSE as a cheap 4Hz `PROGRESS` payload plus a full 1Hz `METRICS` batch, so the UI re-renders once a second no matter how much traffic is flowing. Deterministic aggregate thresholds (P95 / P99 / error rate / RPS etc.) produce a PASS/FAIL verdict — and a cancelled or crashed run is never reported as passed. Reports include a compact summary block, threshold results, an error breakdown, five lightweight hand-rolled inline-SVG charts (no charting dependency), and JSON/CSV export of aggregates only. Safety is bounded by construction: ≤100 virtual users, ≤10 minutes, ≤200,000 requests, bounded retained samples, a re-validating server that never trusts the UI, an explicit confirmation before any non-local target, and no discovery, scanning, or enumeration of any kind. 93 new `performance-engine` unit tests, 27 new `performance-worker` integration tests (a real control plane, a real Worker, a real HTTP target — including cancellation, worker crash recovery, and per-VU chaining isolation), 22 new `apps/web` unit tests, and 16 new Playwright E2E scenarios driving the real UI against the real worker and the M9 mock server — plus the full Milestone 2–9 regression suite (86 E2E tests), unmodified in intent, still passing.
+
+## Milestone 11 — API Contract Testing & OpenAPI Validation (recommended next)
+
+- Validate live responses against an OpenAPI 3.0/3.1 schema
+- Contract drift detection between a collection and its spec
+- Request/response schema assertions
+
+## Milestone 12 — Documentation Generation
 
 - Endpoint documentation from collections
 - Request/response examples, schema documentation
 - Collection-level documentation
 
-## Milestone 12 — Security Hardening
+## Milestone 13 — Security Hardening
 
 - Script sandbox implementation and audit
 - SSRF protection
@@ -109,7 +117,7 @@ Milestones are sequential checkpoints. Per `CLAUDE.md`'s Development Workflow, e
 - XSS protection
 - Prototype pollution protection
 
-## Milestone 13 — Full QA & Release
+## Milestone 14 — Full QA & Release
 
 - Unit and integration test coverage across all packages
 - Playwright E2E coverage of core user flows

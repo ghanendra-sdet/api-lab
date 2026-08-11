@@ -12,6 +12,8 @@ export function TopBar() {
   const activeEnvironmentId = useAppStore((s) => s.environments.activeEnvironmentId);
   const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const activeView = useAppStore((s) => s.activeView);
+  const setActiveView = useAppStore((s) => s.setActiveView);
   const environmentsLoadError = useAppStore((s) => s.environmentsLoadError);
   const [managerOpen, setManagerOpen] = useState(false);
   const [mockManagerOpen, setMockManagerOpen] = useState(false);
@@ -79,6 +81,20 @@ export function TopBar() {
           }`}
         >
           <GearIcon />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView(activeView === "performance" ? "request" : "performance")}
+          aria-label="Performance"
+          aria-pressed={activeView === "performance"}
+          className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            activeView === "performance"
+              ? "font-medium text-blue-600 dark:text-blue-400"
+              : "text-neutral-500"
+          }`}
+        >
+          Performance
         </button>
 
         <button

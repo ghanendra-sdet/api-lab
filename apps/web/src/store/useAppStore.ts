@@ -120,10 +120,20 @@ function loadInitialState(): InitialState {
   };
 }
 
+/**
+ * Which top-level workspace is showing. Milestone 10 adds a real
+ * Performance *page* rather than another modal dialog — a load test is a
+ * long-running activity with live charts, not a quick action, so it needs
+ * durable screen space of its own.
+ */
+export type WorkspaceView = "request" | "performance";
+
 interface AppState {
   // Layout
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  activeView: WorkspaceView;
+  setActiveView: (view: WorkspaceView) => void;
 
   // Theme
   theme: ThemeMode;
@@ -268,6 +278,9 @@ const initial = loadInitialState();
 export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+  activeView: "request",
+  setActiveView: (view) => set({ activeView: view }),
 
   theme: getPreferredTheme(),
   toggleTheme: () =>

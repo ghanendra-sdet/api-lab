@@ -1,0 +1,26 @@
+{
+  "name": "@api-lab/performance-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@api-lab/performance-engine": "*",
+    "@api-lab/request-engine": "*",
+    "@api-lab/runner-engine": "*",
+    "@api-lab/shared": "*",
+    "fastify": "^5.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.5"
+  }
+}

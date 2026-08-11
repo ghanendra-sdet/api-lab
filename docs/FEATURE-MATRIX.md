@@ -179,12 +179,39 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Virtual users / concurrency | P1 | 10 | Planned |
-| Configurable duration | P1 | 10 | Planned |
-| Ramp-up | P1 | 10 | Planned |
-| Metrics: RPS, avg, P50/P90/P95/P99 | P1 | 10 | Planned |
-| Error rate / status distribution | P1 | 10 | Planned |
-| Performance reports | P1 | 10 | Planned |
+| Out-of-browser load generation (`apps/performance-worker` + `worker_threads`) | P0 | 10 | Done |
+| Virtual users / fixed concurrency | P1 | 10 | Done |
+| Configurable duration | P1 | 10 | Done |
+| Ramp-up | P1 | 10 | Done |
+| Fixed request-rate (open) load model with backlog clamping | P2 | 10 | Done |
+| Think time between virtual-user iterations | P2 | 10 | Done |
+| Per-request timeout | P1 | 10 | Done |
+| Single-request performance target | P1 | 10 | Done |
+| Collection performance target | P1 | 10 | Done |
+| Environment resolution at execution time | P1 | 10 | Done |
+| Authentication (API Key / Basic / Bearer / JWT) under load | P1 | 10 | Done |
+| Request chaining under load, isolated per virtual user | P1 | 10 | Done |
+| Metrics: RPS, throughput, avg, min/max, P50/P90/P95/P99 | P1 | 10 | Done |
+| Nearest-rank percentiles with bounded reservoir sampling above 100k samples | P1 | 10 | Done |
+| Error rate / status distribution | P1 | 10 | Done |
+| Error classification (4xx / 5xx / timeout / network / connection / cancelled / client) | P1 | 10 | Done |
+| Per-second time series | P1 | 10 | Done |
+| Live metrics (batched 1Hz aggregate + 4Hz progress over SSE) | P1 | 10 | Done |
+| Aggregate performance thresholds with deterministic PASS/FAIL | P1 | 10 | Done |
+| Cancellation (`Stop Test`) producing a `cancelled` report | P0 | 10 | Done |
+| Worker-failure detection and recoverable UI state | P0 | 10 | Done |
+| Performance reports | P1 | 10 | Done |
+| Charts (RPS, latency, error rate, percentile summary, status codes) | P1 | 10 | Done |
+| Export performance report as JSON / CSV (aggregates only) | P2 | 10 | Done |
+| Safety limits (≤100 users, ≤10 min, ≤200k requests, bounded metrics) | P0 | 10 | Done |
+| Production-traffic warning for non-local targets | P0 | 10 | Done |
+| Performance configuration persistence (versioned, no execution state) | P2 | 10 | Done |
+| In-session performance history (in-memory, never persisted) | P2 | 10 | Done |
+| Response-body retention during load runs | — | 10 | Explicit non-goal — metrics only, by construction |
+| Distributed / cloud / geographic load generation | P2 | Future | Deferred — needs a remote worker architecture |
+| CLI / CI execution of performance tests | P2 | Future | Deferred |
+| WebSocket / gRPC / browser-UI load testing | P2 | Future | Deferred |
+| Scheduled performance tests | P2 | Future | Deferred |
 
 ## Documentation Generation
 
