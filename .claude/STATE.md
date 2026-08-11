@@ -4,7 +4,7 @@ Read this file FIRST on session resume, before re-reading conversation history o
 
 ## Current position
 
-- **Last commit**: `feat: add performance testing engine (Milestone 10)` — pushed to `origin/main`, working tree clean.
+- **Last commit**: `ee2e0a0` — "feat: add performance testing engine" (preceded by `2cd53af`, the .ts-extension normalization) — pushed to `origin/main`, working tree clean.
 - **Milestone 10 (Performance Engine) — COMPLETE.** Reported and STOPPED per workflow rule. Waiting for explicit user approval before Milestone 11.
 - **Workflow rule (from repo CLAUDE.md)**: Analyze → Plan → Explain → Implement → Validate → Report → STOP. Never auto-start the next milestone.
 - **Next milestone recommended**: Milestone 11 — API Contract Testing & OpenAPI Validation. Not started. No prompt drafted yet.
