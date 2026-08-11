@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BODY_MODES, BODY_RAW_FORMATS, HTTP_METHODS } from "@api-lab/shared";
 import { authConfigSchema } from "@api-lab/auth-engine";
 import { assertionSchema } from "@api-lab/test-engine";
+import { extractionSchema } from "@api-lab/runner-engine";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
 const bodyModeSchema = z.enum([...BODY_MODES]);
@@ -32,6 +33,9 @@ const requestConfigSchema = z.object({
   // Backward compatibility (Milestone 7): requests saved before this
   // milestone have no `tests` field at all — default to no assertions.
   tests: z.array(assertionSchema).default([]),
+  // Backward compatibility (Milestone 8): requests saved before this
+  // milestone have no `extractions` field at all — default to none.
+  extractions: z.array(extractionSchema).default([]),
 });
 
 const savedRequestSchema = z.object({

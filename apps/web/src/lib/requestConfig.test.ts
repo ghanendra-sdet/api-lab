@@ -23,6 +23,7 @@ describe("isTabDirty", () => {
         bodyRawFormat: "JSON",
         bodyRawContent: "",
         tests: [],
+        extractions: [],
       },
     });
     expect(isTabDirty(tab)).toBe(false);
@@ -43,6 +44,7 @@ describe("isTabDirty", () => {
         bodyRawFormat: "JSON",
         bodyRawContent: "",
         tests: [],
+        extractions: [],
       },
     });
     tab.url = "https://example.com/changed";

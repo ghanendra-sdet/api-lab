@@ -1,6 +1,7 @@
 import type { BodyMode, BodyRawFormat, HttpMethod, KeyValueRow } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
 import type { Assertion } from "@api-lab/test-engine";
+import type { Extraction } from "@api-lab/runner-engine";
 
 /**
  * The persisted, request-engine-agnostic shape of a request's configuration.
@@ -19,6 +20,12 @@ import type { Assertion } from "@api-lab/test-engine";
  * `tests` (Milestone 7) is a list of serializable, non-executable
  * assertions — see @api-lab/test-engine. Requests saved before Milestone 7
  * have no `tests` field; schema.ts defaults it to `[]` on load.
+ *
+ * `extractions` (Milestone 8) is a list of serializable, non-executable
+ * rules for pulling a value out of this request's response into a runtime
+ * variable a later request can reference — see @api-lab/runner-engine.
+ * Requests saved before Milestone 8 have no `extractions` field; schema.ts
+ * defaults it to `[]` on load.
  */
 export interface RequestConfig {
   method: HttpMethod;
@@ -30,6 +37,7 @@ export interface RequestConfig {
   bodyRawFormat: BodyRawFormat;
   bodyRawContent: string;
   tests: Assertion[];
+  extractions: Extraction[];
 }
 
 export interface SavedRequest {

@@ -11,6 +11,7 @@ function config(overrides: Partial<RequestConfig>): RequestConfig {
     bodyRawFormat: "JSON",
     bodyRawContent: "",
     tests: [],
+    extractions: [],
     ...overrides,
   };
 }

@@ -146,13 +146,13 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 | Stop-on-failure / continue-on-failure | P0 | 7 | Done |
 | Run cancellation | P0 | 7 | Done |
 | Run result reporting (summary + per-request detail) | P0 | 7 | Done |
-| Iterations | P0 | 8 | Planned |
-| Inter-request delay | P1 | 8 | Planned |
-| Data-driven execution (CSV) | P1 | 8 | Planned |
-| Data-driven execution (JSON) | P1 | 8 | Planned |
-| Request chaining (extract → reuse values) | P1 | 8 | Deferred — no safe scripting mechanism yet; result model designed to support it later (see docs/ARCHITECTURE.md) |
+| Iterations | P0 | 8 | Done (per-dataset-row, or one implicit iteration for a dataset-less run) |
+| Inter-request delay | P1 | 8 | Deferred — not part of Milestone 8's explicit scope; no concrete need identified yet |
+| Data-driven execution (CSV) | P1 | 8 | Done (`packages/runner-engine`'s `parseCsvDataset`; 1000-row cap) |
+| Data-driven execution (JSON) | P1 | 8 | Done (`packages/runner-engine`'s `parseJsonDataset`; 1000-row cap) |
+| Request chaining (extract → reuse values) | P1 | 8 | Done (structured JSON-path/header extraction → named runtime variable, resolved through the existing variable resolver — no scripting) |
 | Parallel execution | P2 | Future | Explicit non-goal for the Runner; performance testing (Milestone 10) has its own execution architecture |
-| Run reports (exportable) | P0 | 8 | Planned |
+| Run reports (exportable) | P0 | 8 | Deferred — in-UI iteration/request reporting shipped; exportable report *files* not part of Milestone 8's explicit scope |
 
 ## Mock API Engine
 

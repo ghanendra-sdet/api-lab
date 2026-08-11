@@ -42,6 +42,7 @@ import type {
   NormalizedWorkspaceImport,
 } from "@api-lab/collection-format";
 import { createAssertion, type Assertion, type TestResult } from "@api-lab/test-engine";
+import { createExtraction, type Dataset, type Extraction, type ExtractionResult } from "@api-lab/runner-engine";
 import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
@@ -208,12 +209,22 @@ interface AppState {
   updateAssertion: (tabId: string, assertionId: string, patch: Partial<Omit<Assertion, "id">>) => void;
   removeAssertion: (tabId: string, assertionId: string) => void;
 
+  // Extractions (Milestone 8: pull a runtime variable out of the response)
+  addExtraction: (tabId: string) => string;
+  updateExtraction: (tabId: string, extractionId: string, patch: Partial<Omit<Extraction, "id">>) => void;
+  removeExtraction: (tabId: string, extractionId: string) => void;
+
   // Request execution
   requestStatus: Record<string, "idle" | "loading">;
   responses: Record<string, ApiResponseResult | undefined>;
   testResults: Record<string, TestResult | undefined>;
+  extractionResults: Record<string, ExtractionResult[] | undefined>;
   sendErrors: Record<string, ValidationError | undefined>;
   abortControllers: Record<string, AbortController>;
+  /** Runtime variables extracted from responses, scoped per tab — never
+   * persisted, cleared on tab close or Clear. Lets a tab manually chain
+   * "Send A, then reference {{extractedVar}} in B" without a Runner. */
+  tabRuntimeVariables: Record<string, Record<string, string>>;
   sendRequest: (tabId: string) => Promise<void>;
   cancelRequest: (tabId: string) => void;
   resetRequest: (tabId: string) => void;
@@ -221,7 +232,15 @@ interface AppState {
   // Collection Runner
   runnerState: RunnerState;
   runnerAbortController: AbortController | null;
-  startRunner: (collectionId: string, requestIds: string[], environmentId: string | null, stopOnFailure: boolean) => Promise<void>;
+  runnerDataset: Dataset | null;
+  runnerDatasetName: string | null;
+  setRunnerDataset: (dataset: Dataset | null, name: string | null) => void;
+  startRunner: (
+    collectionId: string,
+    requestIds: string[],
+    environmentId: string | null,
+    stopOnFailure: boolean,
+  ) => Promise<void>;
   cancelRunner: () => void;
   resetRunner: () => void;
 }
@@ -403,14 +422,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   closeTab: (tabId) =>
     set((s) => {
+      const remainingRuntimeVariables = { ...s.tabRuntimeVariables };
+      delete remainingRuntimeVariables[tabId];
+
       const remaining = s.tabs.filter((t) => t.id !== tabId);
       if (remaining.length === 0) {
         const tab = createEmptyTab();
-        return { tabs: [tab], activeTabId: tab.id };
+        return { tabs: [tab], activeTabId: tab.id, tabRuntimeVariables: remainingRuntimeVariables };
       }
       const activeTabId =
         s.activeTabId === tabId ? remaining[remaining.length - 1]!.id : s.activeTabId;
-      return { tabs: remaining, activeTabId };
+      return { tabs: remaining, activeTabId, tabRuntimeVariables: remainingRuntimeVariables };
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
@@ -536,9 +558,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       })),
     })),
 
+  addExtraction: (tabId) => {
+    const extraction = createExtraction("json");
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, (tab) => ({ extractions: [...tab.extractions, extraction] })) }));
+    return extraction.id;
+  },
+  updateExtraction: (tabId, extractionId, patch) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        extractions: tab.extractions.map((e) => (e.id === extractionId ? { ...e, ...patch } : e)),
+      })),
+    })),
+  removeExtraction: (tabId, extractionId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        extractions: tab.extractions.filter((e) => e.id !== extractionId),
+      })),
+    })),
+
   requestStatus: {},
   responses: {},
   testResults: {},
+  extractionResults: {},
+  tabRuntimeVariables: {},
   sendErrors: {},
   abortControllers: {},
 
@@ -563,7 +605,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       tab.id,
       tab.name,
       tabToRequestConfig(tab),
-      activeEnvironment,
+      { environment: activeEnvironment, runtime: state.tabRuntimeVariables[tabId] ?? {} },
       controller.signal,
     );
 
@@ -579,11 +621,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
       }
 
+      const nextRuntimeVariables = outcome.extractedVariables
+        ? { ...s.tabRuntimeVariables[tabId], ...outcome.extractedVariables }
+        : s.tabRuntimeVariables[tabId];
+
       return {
         responses: { ...s.responses, [tabId]: outcome.response },
         testResults: { ...s.testResults, [tabId]: outcome.testResult },
+        extractionResults: { ...s.extractionResults, [tabId]: outcome.extractionResults },
         requestStatus: { ...s.requestStatus, [tabId]: "idle" },
         abortControllers: remainingControllers,
+        tabRuntimeVariables: { ...s.tabRuntimeVariables, [tabId]: nextRuntimeVariables ?? {} },
       };
     });
   },
@@ -593,22 +641,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   resetRequest: (tabId) =>
-    set((s) => ({
-      tabs: updateTab(s.tabs, tabId, {
-        params: [],
-        headers: [],
-        auth: { type: "none" },
-        bodyMode: "none",
-        bodyRawContent: "",
-        tests: [],
-      }),
-      responses: { ...s.responses, [tabId]: undefined },
-      testResults: { ...s.testResults, [tabId]: undefined },
-      sendErrors: { ...s.sendErrors, [tabId]: undefined },
-    })),
+    set((s) => {
+      const remainingRuntimeVariables = { ...s.tabRuntimeVariables };
+      delete remainingRuntimeVariables[tabId];
+      return {
+        tabs: updateTab(s.tabs, tabId, {
+          params: [],
+          headers: [],
+          auth: { type: "none" },
+          bodyMode: "none",
+          bodyRawContent: "",
+          tests: [],
+          extractions: [],
+        }),
+        responses: { ...s.responses, [tabId]: undefined },
+        testResults: { ...s.testResults, [tabId]: undefined },
+        extractionResults: { ...s.extractionResults, [tabId]: undefined },
+        sendErrors: { ...s.sendErrors, [tabId]: undefined },
+        tabRuntimeVariables: remainingRuntimeVariables,
+      };
+    }),
 
   runnerState: createIdleRunnerState(),
   runnerAbortController: null,
+  runnerDataset: null,
+  runnerDatasetName: null,
+  setRunnerDataset: (dataset, name) => set({ runnerDataset: dataset, runnerDatasetName: name }),
 
   startRunner: async (collectionId, requestIds, environmentId, stopOnFailure) => {
     const state = get();
@@ -618,6 +676,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const requested = new Set(requestIds);
     const flat = flattenCollectionRequests(collection).filter((r) => requested.has(r.id));
     const environment = state.environments.environments.find((e) => e.id === environmentId);
+    const dataset = state.runnerDataset;
+    // A dataset-less run is exactly one iteration with an empty data row —
+    // the common case looks identical to Milestone 7's single-pass runner.
+    const iterationRows = dataset && dataset.rows.length > 0 ? dataset.rows : [{}];
     const controller = new AbortController();
 
     set({
@@ -627,37 +689,68 @@ export const useAppStore = create<AppState>((set, get) => ({
         collectionId,
         environmentId,
         stopOnFailure,
-        items: flat.map((r) => ({ requestId: r.id, name: r.name, status: "pending" })),
+        datasetName: state.runnerDatasetName,
+        iterations: iterationRows.map((data, index) => ({
+          index,
+          data,
+          items: flat.map((r) => ({ requestId: r.id, name: r.name, status: "pending" })),
+        })),
         startedAt: Date.now(),
       },
     });
 
-    for (const req of flat) {
-      if (controller.signal.aborted) break;
-
+    function setItem(iterationIndex: number, requestId: string, patch: Partial<RunnerState["iterations"][number]["items"][number]>) {
       set((s) => ({
         runnerState: {
           ...s.runnerState,
-          items: s.runnerState.items.map((i) => (i.requestId === req.id ? { ...i, status: "running" } : i)),
-        },
-      }));
-
-      const outcome = await executeRequestConfig(req.id, req.name, req.request, environment, controller.signal);
-      if (controller.signal.aborted) break;
-
-      const itemStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
-      set((s) => ({
-        runnerState: {
-          ...s.runnerState,
-          items: s.runnerState.items.map((i) =>
-            i.requestId === req.id
-              ? { ...i, status: itemStatus, response: outcome.response, testResult: outcome.testResult, validationError: outcome.validationError }
-              : i,
+          iterations: s.runnerState.iterations.map((iteration) =>
+            iteration.index !== iterationIndex
+              ? iteration
+              : {
+                  ...iteration,
+                  items: iteration.items.map((item) => (item.requestId === requestId ? { ...item, ...patch } : item)),
+                },
           ),
         },
       }));
+    }
 
-      if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error")) break;
+    outer: for (let iterationIndex = 0; iterationIndex < iterationRows.length; iterationIndex++) {
+      const iterationData = iterationRows[iterationIndex]!;
+      // Fresh runtime map per iteration — an extraction in iteration 2 must
+      // never see a value left over from iteration 1 (see
+      // docs/ARCHITECTURE.md's Milestone 8 section).
+      let runtime: Record<string, string> = {};
+
+      for (const req of flat) {
+        if (controller.signal.aborted) break outer;
+
+        setItem(iterationIndex, req.id, { status: "running" });
+
+        const outcome = await executeRequestConfig(
+          req.id,
+          req.name,
+          req.request,
+          { environment, runtime, iteration: iterationData },
+          controller.signal,
+        );
+        if (controller.signal.aborted) break outer;
+
+        const itemStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
+        setItem(iterationIndex, req.id, {
+          status: itemStatus,
+          response: outcome.response,
+          testResult: outcome.testResult,
+          validationError: outcome.validationError,
+          extractionResults: outcome.extractionResults,
+        });
+
+        if (outcome.ok && outcome.extractedVariables) {
+          runtime = { ...runtime, ...outcome.extractedVariables };
+        }
+
+        if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error")) break outer;
+      }
     }
 
     const wasCancelled = controller.signal.aborted;
@@ -666,7 +759,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       runnerState: {
         ...s.runnerState,
         status: wasCancelled ? "cancelled" : "completed",
-        items: s.runnerState.items.map((i) => (i.status === "pending" ? { ...i, status: wasCancelled ? "cancelled" : "skipped" } : i)),
+        iterations: s.runnerState.iterations.map((iteration) => ({
+          ...iteration,
+          items: iteration.items.map((item) =>
+            item.status === "pending" ? { ...item, status: wasCancelled ? "cancelled" : "skipped" } : item,
+          ),
+        })),
         durationMs: Date.now() - (s.runnerState.startedAt ?? Date.now()),
       },
     }));

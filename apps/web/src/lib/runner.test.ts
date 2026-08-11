@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCollection, createFolder, createRequest, type Collection } from "@api-lab/workspace-engine";
-import { flattenCollectionRequests, summarizeRunner, type RunnerState } from "./runner";
+import { flattenCollectionRequests, summarizeRunner, type RunnerItemResult, type RunnerState } from "./runner";
 
 function sampleRequest(overrides = {}) {
   return {
@@ -13,6 +13,7 @@ function sampleRequest(overrides = {}) {
     bodyRawFormat: "JSON" as const,
     bodyRawContent: "",
     tests: [],
+    extractions: [],
     ...overrides,
   };
 }
@@ -62,11 +63,18 @@ describe("flattenCollectionRequests", () => {
 });
 
 describe("summarizeRunner", () => {
-  function state(items: RunnerState["items"]): RunnerState {
-    return { status: "completed", collectionId: "c1", environmentId: null, stopOnFailure: true, items };
+  function state(...iterationsItems: RunnerItemResult[][]): RunnerState {
+    return {
+      status: "completed",
+      collectionId: "c1",
+      environmentId: null,
+      stopOnFailure: true,
+      datasetName: null,
+      iterations: iterationsItems.map((items, index) => ({ index, data: {}, items })),
+    };
   }
 
-  it("counts each status bucket", () => {
+  it("counts each status bucket across a single iteration", () => {
     const summary = summarizeRunner(
       state([
         { requestId: "1", name: "a", status: "passed" },
@@ -76,7 +84,7 @@ describe("summarizeRunner", () => {
         { requestId: "5", name: "e", status: "skipped" },
       ]),
     );
-    expect(summary).toEqual({ passed: 2, failed: 1, errors: 1, skipped: 1, total: 5 });
+    expect(summary).toMatchObject({ passed: 2, failed: 1, errors: 1, skipped: 1, total: 5, iterations: 1 });
   });
 
   it("treats cancelled and pending as skipped for summary purposes", () => {
@@ -87,5 +95,15 @@ describe("summarizeRunner", () => {
       ]),
     );
     expect(summary.skipped).toBe(2);
+  });
+
+  it("aggregates across multiple iterations", () => {
+    const summary = summarizeRunner(
+      state(
+        [{ requestId: "1", name: "a", status: "passed" }],
+        [{ requestId: "1", name: "a", status: "failed" }],
+      ),
+    );
+    expect(summary).toMatchObject({ passed: 1, failed: 1, total: 2, iterations: 2 });
   });
 });

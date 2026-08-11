@@ -17,6 +17,7 @@ export function createEmptyTab(overrides: Partial<RequestTabState> = {}): Reques
     preRequestScript: "",
     postResponseScript: "",
     tests: [],
+    extractions: [],
     ...overrides,
   };
 }

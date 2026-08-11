@@ -1,5 +1,5 @@
 {
-  "name": "@api-lab/workspace-engine",
+  "name": "@api-lab/runner-engine",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@api-lab/auth-engine": "*",
-    "@api-lab/runner-engine": "*",
-    "@api-lab/shared": "*",
+    "@api-lab/request-engine": "*",
     "@api-lab/test-engine": "*",
     "zod": "^3.23.8"
   },

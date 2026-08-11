@@ -7,6 +7,7 @@ import type {
 } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
 import type { Assertion } from "@api-lab/test-engine";
+import type { Extraction } from "@api-lab/runner-engine";
 import type { RequestConfig, RequestLocation } from "@api-lab/workspace-engine";
 
 /** The full editable state of one open request tab. */
@@ -28,6 +29,8 @@ export interface RequestTabState {
    * Replaces the Milestone 1-6 free-text `testsScript` placeholder now
    * that a real (script-free) test engine exists. */
   tests: Assertion[];
+  /** Runtime-variable extractions — see @api-lab/runner-engine (Milestone 8). */
+  extractions: Extraction[];
 
   /**
    * Set only when this tab is linked to a saved request — undefined means

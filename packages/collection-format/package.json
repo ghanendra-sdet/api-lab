@@ -13,6 +13,7 @@
   "dependencies": {
     "@api-lab/auth-engine": "*",
     "@api-lab/environment-engine": "*",
+    "@api-lab/runner-engine": "*",
     "@api-lab/shared": "*",
     "@api-lab/test-engine": "*",
     "@api-lab/workspace-engine": "*",

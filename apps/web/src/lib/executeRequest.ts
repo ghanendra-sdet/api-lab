@@ -9,13 +9,16 @@ import {
 import { buildVariableContext, resolveRequestConfig, type Environment } from "@api-lab/environment-engine";
 import { applyAuth, validateAuthConfig } from "@api-lab/auth-engine";
 import { evaluateAssertions, buildTestResult, type TestResult } from "@api-lab/test-engine";
+import { extractAll, mergeResolutionContext, type ExtractionResult } from "@api-lab/runner-engine";
 import type { RequestConfig } from "@api-lab/workspace-engine";
 import { resolveAuthConfig } from "./authResolve";
+import { resolveAssertions } from "./resolveAssertions";
 
 /** Shared, stateless HTTP transport — used by both the request-tab "Send"
  * path and the Collection Runner, so there is exactly one execution
  * pipeline (resolve variables → resolve/validate/apply auth → validate →
- * build → execute → evaluate assertions), not two that could drift. */
+ * build → execute → evaluate assertions → extract), not two that could
+ * drift. */
 const executor = new BrowserFetchExecutor();
 
 export interface ExecuteRequestResult {
@@ -23,23 +26,40 @@ export interface ExecuteRequestResult {
   validationError?: ValidationError;
   response?: ApiResponseResult;
   testResult?: TestResult;
+  /** Successfully extracted runtime variables (name → value) — the caller
+   * (tab Send or the Runner) decides how long these live. Never persisted. */
+  extractedVariables?: Record<string, string>;
+  extractionResults?: ExtractionResult[];
+}
+
+export interface ExecutionScopes {
+  environment?: Environment;
+  /** Variables extracted by earlier requests in this run/iteration. */
+  runtime?: Record<string, string>;
+  /** The current dataset row, if the caller is running a data-driven iteration. */
+  iteration?: Record<string, string>;
 }
 
 /**
- * Resolves, validates, sends, and asserts against one request config, fully
- * independent of any open tab's state — this is the isolation the
- * Collection Runner needs (see docs/ARCHITECTURE.md's Milestone 7 section):
- * calling this never reads or writes `tabs`, `responses`, or any other
- * tab-scoped store state. The caller decides what to do with the result.
+ * Resolves, validates, sends, asserts, and extracts for one request config,
+ * fully independent of any open tab's state — this is the isolation the
+ * Collection Runner needs (see docs/ARCHITECTURE.md's Milestone 7/8
+ * sections): calling this never reads or writes `tabs`, `responses`, or any
+ * other tab-scoped store state. The caller decides what to do with the
+ * result, including whether extracted variables feed into a later call.
  */
 export async function executeRequestConfig(
   requestId: string,
   requestName: string,
   config: RequestConfig,
-  activeEnvironment: Environment | undefined,
+  scopes: ExecutionScopes,
   signal?: AbortSignal,
 ): Promise<ExecuteRequestResult> {
-  const context = buildVariableContext(activeEnvironment);
+  const context = mergeResolutionContext({
+    environment: buildVariableContext(scopes.environment),
+    runtime: scopes.runtime ?? {},
+    iteration: scopes.iteration ?? {},
+  });
 
   const resolution = resolveRequestConfig(
     { url: config.url, params: config.params, headers: config.headers, bodyRawContent: config.bodyRawContent },
@@ -60,7 +80,7 @@ export async function executeRequestConfig(
       ok: false,
       validationError: {
         field: "variables",
-        message: `Unresolved variable${resolution.unresolvedVariables.length > 1 ? "s" : ""}: ${resolution.unresolvedVariables.join(", ")}. Select an environment that defines ${resolution.unresolvedVariables.length > 1 ? "them" : "it"}, or remove the reference.`,
+        message: `Unresolved variable${resolution.unresolvedVariables.length > 1 ? "s" : ""}: ${resolution.unresolvedVariables.join(", ")}. Select an environment/dataset that defines ${resolution.unresolvedVariables.length > 1 ? "them" : "it"}, or remove the reference.`,
       },
     };
   }
@@ -110,8 +130,11 @@ export async function executeRequestConfig(
 
   const response = await executor.execute(built, { signal });
 
-  const assertionResults = evaluateAssertions(config.tests, response);
+  const resolvedAssertions = resolveAssertions(config.tests, context);
+  const assertionResults = evaluateAssertions(resolvedAssertions, response);
   const testResult = buildTestResult(requestId, requestName, response.duration, assertionResults, response.error ?? undefined);
 
-  return { ok: true, response, testResult };
+  const { variables: extractedVariables, results: extractionResults } = extractAll(config.extractions, response);
+
+  return { ok: true, response, testResult, extractedVariables, extractionResults };
 }

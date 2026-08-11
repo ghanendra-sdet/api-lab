@@ -22,6 +22,7 @@ export function emptyRequestConfig(overrides: Partial<RequestConfig> = {}): Requ
     bodyRawFormat: "JSON",
     bodyRawContent: "",
     tests: [],
+    extractions: [],
     ...overrides,
   };
 }

@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Collection } from "@api-lab/workspace-engine";
+import { parseDataset } from "@api-lab/runner-engine";
 import { useAppStore } from "../../store/useAppStore";
 import { flattenCollectionRequests, summarizeRunner, type RunnerItemStatus } from "../../lib/runner";
 
@@ -38,6 +39,9 @@ function statusIcon(status: RunnerItemStatus): string {
 export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const environments = useAppStore((s) => s.environments.environments);
   const runnerState = useAppStore((s) => s.runnerState);
+  const runnerDataset = useAppStore((s) => s.runnerDataset);
+  const runnerDatasetName = useAppStore((s) => s.runnerDatasetName);
+  const setRunnerDataset = useAppStore((s) => s.setRunnerDataset);
   const startRunner = useAppStore((s) => s.startRunner);
   const cancelRunner = useAppStore((s) => s.cancelRunner);
   const resetRunner = useAppStore((s) => s.resetRunner);
@@ -46,7 +50,9 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(requests.map((r) => r.id)));
   const [environmentId, setEnvironmentId] = useState<string>("");
   const [stopOnFailure, setStopOnFailure] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isRunning = runnerState.status === "running";
   const hasResults = runnerState.status === "completed" || runnerState.status === "cancelled";
@@ -69,6 +75,23 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   function handleClose() {
     if (isRunning) cancelRunner();
     onClose();
+  }
+
+  async function handleDatasetFile(file: File) {
+    setDatasetError(null);
+    const text = await file.text();
+    const result = parseDataset(file.name, text);
+    if (!result.ok) {
+      setDatasetError(result.detail);
+      return;
+    }
+    setRunnerDataset(result.data, file.name);
+  }
+
+  function handleClearDataset() {
+    setRunnerDataset(null, null);
+    setDatasetError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   return (
@@ -128,6 +151,40 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
               </label>
 
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Dataset (optional)
+              </p>
+              {runnerDataset ? (
+                <div className="mb-3 flex items-center justify-between rounded border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-700">
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    {runnerDatasetName} — {runnerDataset.rows.length} row{runnerDataset.rows.length === 1 ? "" : "s"},{" "}
+                    {runnerDataset.columns.length} column{runnerDataset.columns.length === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearDataset}
+                    className="rounded px-1.5 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,.csv,application/json,text/csv"
+                    aria-label="Import dataset"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleDatasetFile(file);
+                    }}
+                    className="block w-full text-sm text-neutral-600 dark:text-neutral-300"
+                  />
+                  {datasetError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{datasetError}</p>}
+                </div>
+              )}
+
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Requests ({selected.size}/{requests.length})
               </p>
               {requests.length === 0 ? (
@@ -165,43 +222,78 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                 </p>
               </div>
 
-              <ul className="space-y-1">
-                {runnerState.items.map((item) => (
-                  <li key={item.requestId} className="rounded border border-neutral-100 dark:border-neutral-900">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId((id) => (id === item.requestId ? null : item.requestId))}
-                      className="flex w-full items-center justify-between px-2 py-1.5 text-left text-sm"
-                    >
-                      <span className={STATUS_CLASS[item.status]}>
-                        <span aria-hidden="true">{statusIcon(item.status)}</span> {item.name}
-                      </span>
-                      <span className={`text-xs ${STATUS_CLASS[item.status]}`}>{STATUS_LABEL[item.status]}</span>
-                    </button>
-                    {expandedId === item.requestId && (
-                      <div className="border-t border-neutral-100 px-2 py-2 text-xs dark:border-neutral-900">
-                        {item.validationError && (
-                          <p className="text-red-600 dark:text-red-400">{item.validationError.message}</p>
-                        )}
-                        {item.response && (
-                          <p className="text-neutral-600 dark:text-neutral-300">
-                            Status: {item.response.status ?? "—"} · {item.response.duration}ms
-                          </p>
-                        )}
-                        {item.testResult && item.testResult.assertions.length > 0 && (
-                          <ul className="mt-1 space-y-0.5">
-                            {item.testResult.assertions.map((a, i) => (
-                              <li key={i} className={a.passed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>
-                                <span aria-hidden="true">{a.passed ? "✓" : "✗"}</span> {a.message}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
+              {runnerState.iterations.map((iteration) => {
+                const showIterationHeader = runnerState.iterations.length > 1;
+                return (
+                  <div key={iteration.index} className={showIterationHeader ? "mb-3" : undefined}>
+                    {showIterationHeader && (
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                        Iteration {iteration.index + 1}
+                        {Object.keys(iteration.data).length > 0 &&
+                          ` — ${Object.entries(iteration.data)
+                            .map(([k, v]) => `${k}=${v}`)
+                            .join(", ")}`}
+                      </p>
                     )}
-                  </li>
-                ))}
-              </ul>
+                    <ul className="space-y-1">
+                      {iteration.items.map((item) => {
+                        const key = `${iteration.index}:${item.requestId}`;
+                        return (
+                          <li key={key} className="rounded border border-neutral-100 dark:border-neutral-900">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedKey((k) => (k === key ? null : key))}
+                              className="flex w-full items-center justify-between px-2 py-1.5 text-left text-sm"
+                            >
+                              <span className={STATUS_CLASS[item.status]}>
+                                <span aria-hidden="true">{statusIcon(item.status)}</span> {item.name}
+                              </span>
+                              <span className={`text-xs ${STATUS_CLASS[item.status]}`}>{STATUS_LABEL[item.status]}</span>
+                            </button>
+                            {expandedKey === key && (
+                              <div className="border-t border-neutral-100 px-2 py-2 text-xs dark:border-neutral-900">
+                                {item.validationError && (
+                                  <p className="text-red-600 dark:text-red-400">{item.validationError.message}</p>
+                                )}
+                                {item.response && (
+                                  <p className="text-neutral-600 dark:text-neutral-300">
+                                    Status: {item.response.status ?? "—"} · {item.response.duration}ms
+                                  </p>
+                                )}
+                                {item.testResult && item.testResult.assertions.length > 0 && (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {item.testResult.assertions.map((a, i) => (
+                                      <li
+                                        key={i}
+                                        className={a.passed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}
+                                      >
+                                        <span aria-hidden="true">{a.passed ? "✓" : "✗"}</span> {a.message}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {item.extractionResults && item.extractionResults.length > 0 && (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {item.extractionResults.map((r) => (
+                                      <li
+                                        key={r.extraction.id}
+                                        className={r.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}
+                                      >
+                                        <span aria-hidden="true">{r.ok ? "✓" : "✗"}</span> {r.extraction.variable}
+                                        {r.ok ? ` = ${r.value}` : ` — ${r.error}`}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

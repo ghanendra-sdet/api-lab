@@ -1,6 +1,7 @@
 import { isFolder, isRequest, type Collection, type RequestConfig, type RequestLocation } from "@api-lab/workspace-engine";
 import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine";
 import type { TestResult } from "@api-lab/test-engine";
+import type { ExtractionResult } from "@api-lab/runner-engine";
 
 export interface RunnableRequest {
   id: string;
@@ -40,6 +41,19 @@ export interface RunnerItemResult {
   response?: ApiResponseResult;
   testResult?: TestResult;
   validationError?: ValidationError;
+  extractionResults?: ExtractionResult[];
+}
+
+/** One pass through the collection's requests — either the single implicit
+ * iteration of a dataset-less run, or one row of an imported dataset. Each
+ * iteration gets a fresh runtime-variable map (extractions from one
+ * iteration never leak into the next), so a failed extraction in iteration
+ * 2 can never accidentally read a stale value from iteration 1. */
+export interface RunnerIterationResult {
+  index: number;
+  /** The dataset row this iteration ran with — empty for a dataset-less run. */
+  data: Record<string, string>;
+  items: RunnerItemResult[];
 }
 
 export type RunnerStatus = "idle" | "running" | "completed" | "cancelled";
@@ -49,25 +63,39 @@ export interface RunnerState {
   collectionId: string | null;
   environmentId: string | null;
   stopOnFailure: boolean;
-  items: RunnerItemResult[];
+  datasetName: string | null;
+  iterations: RunnerIterationResult[];
   startedAt?: number;
   durationMs?: number;
 }
 
 export function createIdleRunnerState(): RunnerState {
-  return { status: "idle", collectionId: null, environmentId: null, stopOnFailure: true, items: [] };
+  return {
+    status: "idle",
+    collectionId: null,
+    environmentId: null,
+    stopOnFailure: true,
+    datasetName: null,
+    iterations: [],
+  };
 }
 
-export function summarizeRunner(state: RunnerState): { passed: number; failed: number; errors: number; skipped: number; total: number } {
+export function summarizeRunner(
+  state: RunnerState,
+): { passed: number; failed: number; errors: number; skipped: number; total: number; iterations: number } {
   let passed = 0;
   let failed = 0;
   let errors = 0;
   let skipped = 0;
-  for (const item of state.items) {
-    if (item.status === "passed") passed += 1;
-    else if (item.status === "failed") failed += 1;
-    else if (item.status === "error") errors += 1;
-    else if (item.status === "skipped" || item.status === "cancelled" || item.status === "pending") skipped += 1;
+  let total = 0;
+  for (const iteration of state.iterations) {
+    for (const item of iteration.items) {
+      total += 1;
+      if (item.status === "passed") passed += 1;
+      else if (item.status === "failed") failed += 1;
+      else if (item.status === "error") errors += 1;
+      else if (item.status === "skipped" || item.status === "cancelled" || item.status === "pending") skipped += 1;
+    }
   }
-  return { passed, failed, errors, skipped, total: state.items.length };
+  return { passed, failed, errors, skipped, total, iterations: state.iterations.length };
 }
