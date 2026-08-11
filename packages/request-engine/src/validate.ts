@@ -1,5 +1,5 @@
 import type { BodyMode, BodyRawFormat } from "@api-lab/shared";
-import type { ValidationError } from "./types";
+import type { ValidationError } from "./types.ts";
 
 const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
 

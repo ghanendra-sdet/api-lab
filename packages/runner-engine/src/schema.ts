@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EXTRACTION_SOURCES } from "./types";
+import { EXTRACTION_SOURCES } from "./types.ts";
 
 export const extractionSchema = z.object({
   id: z.string(),

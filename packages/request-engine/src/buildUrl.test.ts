@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUrl } from "./buildUrl";
+import { buildUrl } from "./buildUrl.ts";
 
 describe("buildUrl", () => {
   it("returns the base URL unchanged when there are no params", () => {

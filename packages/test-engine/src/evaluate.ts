@@ -1,6 +1,6 @@
 import type { ApiResponseResult } from "@api-lab/request-engine";
-import { evaluateJsonPath } from "./jsonPath";
-import type { Assertion, AssertionOperator, AssertionResult } from "./types";
+import { evaluateJsonPath } from "./jsonPath.ts";
+import type { Assertion, AssertionOperator, AssertionResult } from "./types.ts";
 
 function compareNumeric(actual: number, operator: AssertionOperator, expected: number): boolean {
   switch (operator) {

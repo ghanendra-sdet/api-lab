@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateUrl, validateJsonBody } from "./validate";
+import { validateUrl, validateJsonBody } from "./validate.ts";
 
 describe("validateUrl", () => {
   it("rejects an empty URL", () => {

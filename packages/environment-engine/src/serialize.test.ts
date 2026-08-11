@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyEnvironmentWorkspace } from "./index";
-import { createEnvironment } from "./environment";
-import { addVariable, updateVariable } from "./variable";
-import { deserializeEnvironments, serializeEnvironments } from "./serialize";
+import { createEmptyEnvironmentWorkspace } from "./index.ts";
+import { createEnvironment } from "./environment.ts";
+import { addVariable, updateVariable } from "./variable.ts";
+import { deserializeEnvironments, serializeEnvironments } from "./serialize.ts";
 
 describe("serializeEnvironments / deserializeEnvironments", () => {
   it("round-trips a workspace with variables", () => {

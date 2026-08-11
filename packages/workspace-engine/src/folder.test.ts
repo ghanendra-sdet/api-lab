@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWorkspace } from "./index";
-import { createCollection } from "./collection";
-import { createFolder, deleteFolder, renameFolder } from "./folder";
+import { createEmptyWorkspace } from "./index.ts";
+import { createCollection } from "./collection.ts";
+import { createFolder, deleteFolder, renameFolder } from "./folder.ts";
 
 function setup() {
   return createCollection(createEmptyWorkspace(), "API").workspace;

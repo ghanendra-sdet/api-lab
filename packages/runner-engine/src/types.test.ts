@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeResolutionContext } from "./types";
+import { mergeResolutionContext } from "./types.ts";
 
 describe("mergeResolutionContext", () => {
   it("merges all three scopes", () => {

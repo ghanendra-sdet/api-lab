@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDisplayVariableContext, buildVariableContext, resolveVariables } from "./resolver";
-import type { Environment } from "./types";
+import { buildDisplayVariableContext, buildVariableContext, resolveVariables } from "./resolver.ts";
+import type { Environment } from "./types.ts";
 
 describe("resolveVariables", () => {
   it("resolves a single variable", () => {

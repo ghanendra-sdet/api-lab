@@ -1,7 +1,7 @@
-import { buildUrl } from "./buildUrl";
-import { buildHeaders, hasHeader } from "./buildHeaders";
-import { buildBody } from "./buildBody";
-import type { ApiRequestConfig, BuiltRequest } from "./types";
+import { buildUrl } from "./buildUrl.ts";
+import { buildHeaders, hasHeader } from "./buildHeaders.ts";
+import { buildBody } from "./buildBody.ts";
+import type { ApiRequestConfig, BuiltRequest } from "./types.ts";
 
 /**
  * Combines the URL, header, and body builders into the final request the

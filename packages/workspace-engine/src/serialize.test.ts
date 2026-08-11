@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWorkspace } from "./index";
-import { createCollection } from "./collection";
-import { createFolder } from "./folder";
-import { createRequest } from "./request";
-import { deserializeWorkspace, serializeWorkspace } from "./serialize";
-import { sampleRequestConfig } from "./testHelpers";
+import { createEmptyWorkspace } from "./index.ts";
+import { createCollection } from "./collection.ts";
+import { createFolder } from "./folder.ts";
+import { createRequest } from "./request.ts";
+import { deserializeWorkspace, serializeWorkspace } from "./serialize.ts";
+import { sampleRequestConfig } from "./testHelpers.ts";
 
 function buildSampleWorkspace() {
   const { workspace: w1, collectionId } = createCollection(createEmptyWorkspace(), "API");

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWorkspace } from "./index";
-import { createCollection } from "./collection";
-import { createRequest } from "./request";
-import { moveCollectionDown, moveCollectionUp, moveItemDown, moveItemUp } from "./reorder";
-import { sampleRequestConfig } from "./testHelpers";
+import { createEmptyWorkspace } from "./index.ts";
+import { createCollection } from "./collection.ts";
+import { createRequest } from "./request.ts";
+import { moveCollectionDown, moveCollectionUp, moveItemDown, moveItemUp } from "./reorder.ts";
+import { sampleRequestConfig } from "./testHelpers.ts";
 
 describe("moveCollectionUp / moveCollectionDown", () => {
   it("swaps adjacent collections", () => {

@@ -1,6 +1,6 @@
-import type { RequestConfig, RequestLocation, SavedRequest, Workspace } from "./types";
-import { createWorkspaceId } from "./id";
-import { getRequestsAtLocation, isRequest, touch, withItemsAtLocation } from "./internal";
+import type { RequestConfig, RequestLocation, SavedRequest, Workspace } from "./types.ts";
+import { createWorkspaceId } from "./id.ts";
+import { getRequestsAtLocation, isRequest, touch, withItemsAtLocation } from "./internal.ts";
 
 export function createRequest(
   workspace: Workspace,

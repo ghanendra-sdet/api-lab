@@ -1,6 +1,6 @@
 import type { EnvironmentWorkspace } from "@api-lab/environment-engine";
 import type { Workspace } from "@api-lab/workspace-engine";
-import { NATIVE_FORMAT_VERSION, type NativeExport } from "./schema";
+import { NATIVE_FORMAT_VERSION, type NativeExport } from "./schema.ts";
 
 /**
  * The native format preserves the API Lab domain model directly — unlike

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BrowserFetchExecutor } from "./BrowserFetchExecutor";
-import type { BuiltRequest } from "../types";
+import { BrowserFetchExecutor } from "./BrowserFetchExecutor.ts";
+import type { BuiltRequest } from "../types.ts";
 
 const baseRequest: BuiltRequest = {
   url: "https://example.com/users",

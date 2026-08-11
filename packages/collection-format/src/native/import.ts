@@ -1,6 +1,6 @@
 import { isFolder } from "@api-lab/workspace-engine";
-import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem, NormalizedWorkspaceImport } from "../types";
-import { nativeExportSchema, type NativeExport } from "./schema";
+import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem, NormalizedWorkspaceImport } from "../types.ts";
+import { nativeExportSchema, type NativeExport } from "./schema.ts";
 
 export type NativeParseResult = { ok: true; data: NativeExport } | { ok: false; detail: string };
 

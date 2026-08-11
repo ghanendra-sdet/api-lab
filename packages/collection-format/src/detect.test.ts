@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFormat } from "./detect";
+import { detectFormat } from "./detect.ts";
 
 describe("detectFormat", () => {
   it("detects a Postman collection", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateAuthConfig } from "./validate";
-import { createDefaultAuthConfig } from "./types";
+import { validateAuthConfig } from "./validate.ts";
+import { createDefaultAuthConfig } from "./types.ts";
 
 describe("validateAuthConfig", () => {
   it("No Auth is always valid", () => {

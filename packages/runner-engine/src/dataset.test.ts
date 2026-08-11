@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectDatasetFormat, MAX_DATASET_ROWS, parseCsvDataset, parseDataset, parseJsonDataset } from "./dataset";
+import { detectDatasetFormat, MAX_DATASET_ROWS, parseCsvDataset, parseDataset, parseJsonDataset } from "./dataset.ts";
 
 describe("parseJsonDataset", () => {
   it("parses a valid array of objects", () => {

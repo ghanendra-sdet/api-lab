@@ -1,4 +1,4 @@
-import { openApiDocumentSchema, type OpenApiDocument } from "./schema";
+import { openApiDocumentSchema, type OpenApiDocument } from "./schema.ts";
 
 export type OpenApiParseResult = { ok: true; data: OpenApiDocument } | { ok: false; detail: string };
 

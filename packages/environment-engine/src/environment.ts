@@ -1,6 +1,6 @@
-import type { Environment, EnvironmentWorkspace } from "./types";
-import { createEnvironmentId } from "./id";
-import { findEnvironment, touch } from "./internal";
+import type { Environment, EnvironmentWorkspace } from "./types.ts";
+import { createEnvironmentId } from "./id.ts";
+import { findEnvironment, touch } from "./internal.ts";
 
 export function createEnvironment(
   workspace: EnvironmentWorkspace,

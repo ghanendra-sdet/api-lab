@@ -1,5 +1,5 @@
-import { createAssertionId } from "./id";
-import { OPERATORS_BY_TARGET, type Assertion, type AssertionTarget } from "./types";
+import { createAssertionId } from "./id.ts";
+import { OPERATORS_BY_TARGET, type Assertion, type AssertionTarget } from "./types.ts";
 
 export function createAssertion(target: AssertionTarget = "status"): Assertion {
   return {

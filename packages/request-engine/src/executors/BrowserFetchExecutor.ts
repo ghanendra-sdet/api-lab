@@ -1,5 +1,5 @@
-import type { ApiResponseResult, BuiltRequest, RequestExecutor, RequestExecutorOptions } from "../types";
-import { normalizeResponse, errorResponse } from "../normalizeResponse";
+import type { ApiResponseResult, BuiltRequest, RequestExecutor, RequestExecutorOptions } from "../types.ts";
+import { normalizeResponse, errorResponse } from "../normalizeResponse.ts";
 
 const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD"]);
 

@@ -1,4 +1,4 @@
-import type { AuthConfig, AuthValidationError } from "./types";
+import type { AuthConfig, AuthValidationError } from "./types.ts";
 
 /** Pre-send validation — mirrors request-engine's validateUrl/validateJsonBody
  * pattern: returns a typed error instead of throwing, so the caller can

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWorkspace } from "./index";
-import { createCollection, deleteCollection, renameCollection } from "./collection";
-import { createFolder } from "./folder";
-import { createRequest } from "./request";
-import { sampleRequestConfig } from "./testHelpers";
+import { createEmptyWorkspace } from "./index.ts";
+import { createCollection, deleteCollection, renameCollection } from "./collection.ts";
+import { createFolder } from "./folder.ts";
+import { createRequest } from "./request.ts";
+import { sampleRequestConfig } from "./testHelpers.ts";
 
 describe("createCollection", () => {
   it("adds a new empty collection and returns its id", () => {

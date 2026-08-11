@@ -1,4 +1,4 @@
-import type { RequestConfig } from "./types";
+import type { RequestConfig } from "./types.ts";
 
 export function sampleRequestConfig(overrides: Partial<RequestConfig> = {}): RequestConfig {
   return {

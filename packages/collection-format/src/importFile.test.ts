@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseImportFile } from "./importFile";
-import { MAX_IMPORT_FILE_SIZE_BYTES } from "./types";
+import { parseImportFile } from "./importFile.ts";
+import { MAX_IMPORT_FILE_SIZE_BYTES } from "./types.ts";
 
 const postmanDir = fileURLToPath(new URL("../fixtures/postman", import.meta.url));
 const openapiDir = fileURLToPath(new URL("../fixtures/openapi", import.meta.url));

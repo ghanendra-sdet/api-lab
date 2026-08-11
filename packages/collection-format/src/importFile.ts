@@ -1,10 +1,10 @@
-import { detectFormat } from "./detect";
-import { parsePostmanCollection, parsePostmanEnvironment } from "./postman/parse";
-import { adaptPostmanCollection, adaptPostmanEnvironment } from "./postman/importAdapter";
-import { parseOpenApiDocument } from "./openapi/parse";
-import { adaptOpenApiDocument } from "./openapi/importAdapter";
-import { parseNativeExport, adaptNativeExport } from "./native/import";
-import { MAX_IMPORT_FILE_SIZE_BYTES, type ParseResult } from "./types";
+import { detectFormat } from "./detect.ts";
+import { parsePostmanCollection, parsePostmanEnvironment } from "./postman/parse.ts";
+import { adaptPostmanCollection, adaptPostmanEnvironment } from "./postman/importAdapter.ts";
+import { parseOpenApiDocument } from "./openapi/parse.ts";
+import { adaptOpenApiDocument } from "./openapi/importAdapter.ts";
+import { parseNativeExport, adaptNativeExport } from "./native/import.ts";
+import { MAX_IMPORT_FILE_SIZE_BYTES, type ParseResult } from "./types.ts";
 
 /**
  * The single entry point the UI calls: raw file text in, a normalized

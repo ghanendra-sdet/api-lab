@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBody } from "./buildBody";
+import { buildBody } from "./buildBody.ts";
 
 describe("buildBody", () => {
   it("returns no body for mode 'none'", () => {

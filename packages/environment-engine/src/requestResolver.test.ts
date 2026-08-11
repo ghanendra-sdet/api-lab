@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveRequestConfig, type ResolvableRequestConfig } from "./requestResolver";
+import { resolveRequestConfig, type ResolvableRequestConfig } from "./requestResolver.ts";
 
 function config(overrides: Partial<ResolvableRequestConfig> = {}): ResolvableRequestConfig {
   return {

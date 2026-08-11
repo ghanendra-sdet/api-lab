@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseOpenApiDocument } from "./parse";
-import { adaptOpenApiDocument } from "./importAdapter";
+import { parseOpenApiDocument } from "./parse.ts";
+import { adaptOpenApiDocument } from "./importAdapter.ts";
 
 const fixturesDir = fileURLToPath(new URL("../../fixtures/openapi", import.meta.url));
 

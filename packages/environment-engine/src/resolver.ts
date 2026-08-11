@@ -1,4 +1,4 @@
-import type { Environment } from "./types";
+import type { Environment } from "./types.ts";
 
 /**
  * Syntax: `{{name}}` where `name` is `[A-Za-z_][A-Za-z0-9_]*`. No whitespace

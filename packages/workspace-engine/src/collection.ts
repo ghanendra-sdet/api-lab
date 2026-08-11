@@ -1,6 +1,6 @@
-import type { Collection, Workspace } from "./types";
-import { createWorkspaceId } from "./id";
-import { touch } from "./internal";
+import type { Collection, Workspace } from "./types.ts";
+import { createWorkspaceId } from "./id.ts";
+import { touch } from "./internal.ts";
 
 export function createCollection(
   workspace: Workspace,

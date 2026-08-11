@@ -1,12 +1,12 @@
-export * from "./types";
-export { isFolder, isRequest, getRequestsAtLocation } from "./internal";
-export * from "./collection";
-export * from "./folder";
-export * from "./request";
-export * from "./reorder";
-export * from "./serialize";
+export * from "./types.ts";
+export { isFolder, isRequest, getRequestsAtLocation } from "./internal.ts";
+export * from "./collection.ts";
+export * from "./folder.ts";
+export * from "./request.ts";
+export * from "./reorder.ts";
+export * from "./serialize.ts";
 
-import type { Workspace } from "./types";
+import type { Workspace } from "./types.ts";
 
 export function createEmptyWorkspace(): Workspace {
   return { collections: [] };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWorkspace } from "./index";
-import { createCollection } from "./collection";
-import { createFolder } from "./folder";
+import { createEmptyWorkspace } from "./index.ts";
+import { createCollection } from "./collection.ts";
+import { createFolder } from "./folder.ts";
 import {
   createRequest,
   deleteRequest,
@@ -10,8 +10,8 @@ import {
   renameRequest,
   updateRequestConfig,
 } from "./request";
-import { getRequestsAtLocation } from "./internal";
-import { sampleRequestConfig } from "./testHelpers";
+import { getRequestsAtLocation } from "./internal.ts";
+import { sampleRequestConfig } from "./testHelpers.ts";
 
 function setupCollection() {
   const { workspace, collectionId } = createCollection(createEmptyWorkspace(), "API");

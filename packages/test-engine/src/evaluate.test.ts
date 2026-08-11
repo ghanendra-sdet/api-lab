@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ApiResponseResult } from "@api-lab/request-engine";
-import { evaluateAssertion, evaluateAssertions } from "./evaluate";
-import { createAssertion } from "./factory";
-import type { Assertion } from "./types";
+import { evaluateAssertion, evaluateAssertions } from "./evaluate.ts";
+import { createAssertion } from "./factory.ts";
+import type { Assertion } from "./types.ts";
 
 function response(overrides: Partial<ApiResponseResult> = {}): ApiResponseResult {
   return {

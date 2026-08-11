@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parsePostmanCollection, parsePostmanEnvironment } from "./parse";
-import { adaptPostmanCollection, adaptPostmanEnvironment } from "./importAdapter";
+import { parsePostmanCollection, parsePostmanEnvironment } from "./parse.ts";
+import { adaptPostmanCollection, adaptPostmanEnvironment } from "./importAdapter.ts";
 
 const fixturesDir = fileURLToPath(new URL("../../fixtures/postman", import.meta.url));
 

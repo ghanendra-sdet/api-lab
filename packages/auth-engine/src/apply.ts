@@ -1,5 +1,5 @@
 import type { KeyValueRow } from "@api-lab/shared";
-import type { AuthConfig } from "./types";
+import type { AuthConfig } from "./types.ts";
 
 export interface ApplyAuthResult {
   headers: KeyValueRow[];

@@ -1,4 +1,4 @@
-import type { AssertionResult, TestResult, TestStatus } from "./types";
+import type { AssertionResult, TestResult, TestStatus } from "./types.ts";
 
 export function deriveTestStatus(assertionResults: AssertionResult[], executionError: string | undefined): TestStatus {
   if (executionError) return "error";

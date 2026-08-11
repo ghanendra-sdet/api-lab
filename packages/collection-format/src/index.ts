@@ -1,16 +1,16 @@
-export * from "./types";
-export * from "./detect";
-export * from "./importFile";
+export * from "./types.ts";
+export * from "./detect.ts";
+export * from "./importFile.ts";
 
-export * from "./postman/schema";
-export * from "./postman/parse";
-export * from "./postman/importAdapter";
-export * from "./postman/exportAdapter";
+export * from "./postman/schema.ts";
+export * from "./postman/parse.ts";
+export * from "./postman/importAdapter.ts";
+export * from "./postman/exportAdapter.ts";
 
-export * from "./openapi/schema";
-export * from "./openapi/parse";
-export * from "./openapi/importAdapter";
+export * from "./openapi/schema.ts";
+export * from "./openapi/parse.ts";
+export * from "./openapi/importAdapter.ts";
 
-export * from "./native/schema";
-export * from "./native/export";
-export * from "./native/import";
+export * from "./native/schema.ts";
+export * from "./native/export.ts";
+export * from "./native/import.ts";

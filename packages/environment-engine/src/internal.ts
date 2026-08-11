@@ -1,4 +1,4 @@
-import type { Environment, EnvironmentWorkspace } from "./types";
+import type { Environment, EnvironmentWorkspace } from "./types.ts";
 
 export function findEnvironment(workspace: EnvironmentWorkspace, environmentId: string): Environment {
   const environment = workspace.environments.find((e) => e.id === environmentId);

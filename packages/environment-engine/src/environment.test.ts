@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyEnvironmentWorkspace } from "./index";
-import { createEnvironment, deleteEnvironment, duplicateEnvironment, renameEnvironment, setActiveEnvironment } from "./environment";
-import { addVariable, removeVariable, updateVariable } from "./variable";
+import { createEmptyEnvironmentWorkspace } from "./index.ts";
+import { createEnvironment, deleteEnvironment, duplicateEnvironment, renameEnvironment, setActiveEnvironment } from "./environment.ts";
+import { addVariable, removeVariable, updateVariable } from "./variable.ts";
 
 describe("environment CRUD", () => {
   it("creates an environment", () => {

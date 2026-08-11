@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHeaders, hasHeader } from "./buildHeaders";
+import { buildHeaders, hasHeader } from "./buildHeaders.ts";
 
 describe("buildHeaders", () => {
   it("includes only enabled headers", () => {

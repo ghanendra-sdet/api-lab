@@ -1,9 +1,9 @@
 import { HTTP_METHODS, type BodyRawFormat, type HttpMethod, type KeyValueRow } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
 import type { RequestConfig } from "@api-lab/workspace-engine";
-import { emptyRequestConfig, row } from "../internal";
-import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem, NormalizedRequest } from "../types";
-import type { PostmanAuth, PostmanBody, PostmanCollection, PostmanEnvironment, PostmanItem, PostmanUrl } from "./schema";
+import { emptyRequestConfig, row } from "../internal.ts";
+import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem, NormalizedRequest } from "../types.ts";
+import type { PostmanAuth, PostmanBody, PostmanCollection, PostmanEnvironment, PostmanItem, PostmanUrl } from "./schema.ts";
 
 const SUPPORTED_METHODS = new Set<string>(HTTP_METHODS);
 

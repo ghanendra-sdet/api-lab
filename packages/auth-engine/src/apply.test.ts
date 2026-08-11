@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAuth } from "./apply";
+import { applyAuth } from "./apply.ts";
 import type { KeyValueRow } from "@api-lab/shared";
 
 function row(key: string, value: string): KeyValueRow {

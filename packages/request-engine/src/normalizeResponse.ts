@@ -1,4 +1,4 @@
-import type { ApiResponseResult } from "./types";
+import type { ApiResponseResult } from "./types.ts";
 
 function headersToRecord(headers: Headers): Record<string, string> {
   const result: Record<string, string> = {};

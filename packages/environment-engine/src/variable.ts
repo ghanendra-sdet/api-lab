@@ -1,6 +1,6 @@
-import type { EnvironmentWorkspace, Variable } from "./types";
-import { createEnvironmentId } from "./id";
-import { findEnvironment, replaceEnvironment, touch } from "./internal";
+import type { EnvironmentWorkspace, Variable } from "./types.ts";
+import { createEnvironmentId } from "./id.ts";
+import { findEnvironment, replaceEnvironment, touch } from "./internal.ts";
 
 export function addVariable(
   workspace: EnvironmentWorkspace,

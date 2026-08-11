@@ -1,6 +1,6 @@
-import type { EnvironmentWorkspace, PersistedEnvironments } from "./types";
-import { ENVIRONMENT_FORMAT_VERSION } from "./types";
-import { environmentWorkspaceSchema } from "./schema";
+import type { EnvironmentWorkspace, PersistedEnvironments } from "./types.ts";
+import { ENVIRONMENT_FORMAT_VERSION } from "./types.ts";
+import { environmentWorkspaceSchema } from "./schema.ts";
 
 export function serializeEnvironments(data: EnvironmentWorkspace): PersistedEnvironments {
   return { version: ENVIRONMENT_FORMAT_VERSION, data };

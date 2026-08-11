@@ -1,8 +1,8 @@
 import { HTTP_METHODS, type HttpMethod } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
-import { emptyRequestConfig, row } from "../internal";
-import type { NormalizedCollectionImport, NormalizedFolder, NormalizedItem, NormalizedRequest } from "../types";
-import { HTTP_METHOD_KEYS, operationSchema, type OpenApiDocument, type OpenApiOperation, type OpenApiSecurityScheme } from "./schema";
+import { emptyRequestConfig, row } from "../internal.ts";
+import type { NormalizedCollectionImport, NormalizedFolder, NormalizedItem, NormalizedRequest } from "../types.ts";
+import { HTTP_METHOD_KEYS, operationSchema, type OpenApiDocument, type OpenApiOperation, type OpenApiSecurityScheme } from "./schema.ts";
 
 const SUPPORTED_METHODS = new Set<string>(HTTP_METHODS);
 

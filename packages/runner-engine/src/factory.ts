@@ -1,5 +1,5 @@
-import { createExtractionId } from "./id";
-import type { Extraction, ExtractionSource } from "./types";
+import { createExtractionId } from "./id.ts";
+import type { Extraction, ExtractionSource } from "./types.ts";
 
 export function createExtraction(source: ExtractionSource = "json"): Extraction {
   return {

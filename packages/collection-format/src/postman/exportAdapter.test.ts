@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createCollection, createRequest, type Collection } from "@api-lab/workspace-engine";
-import { emptyRequestConfig } from "../internal";
-import { exportPostmanCollection } from "./exportAdapter";
-import { parsePostmanCollection } from "./parse";
-import { adaptPostmanCollection } from "./importAdapter";
+import { emptyRequestConfig } from "../internal.ts";
+import { exportPostmanCollection } from "./exportAdapter.ts";
+import { parsePostmanCollection } from "./parse.ts";
+import { adaptPostmanCollection } from "./importAdapter.ts";
 
 function buildSampleCollection(): Collection {
   const { workspace, collectionId } = createCollection({ collections: [] }, "My Collection");

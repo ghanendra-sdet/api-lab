@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeResponse, errorResponse } from "./normalizeResponse";
+import { normalizeResponse, errorResponse } from "./normalizeResponse.ts";
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 

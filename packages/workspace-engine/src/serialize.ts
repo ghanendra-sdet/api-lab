@@ -1,6 +1,6 @@
-import type { PersistedWorkspace, Workspace } from "./types";
-import { WORKSPACE_FORMAT_VERSION } from "./types";
-import { workspaceSchema } from "./schema";
+import type { PersistedWorkspace, Workspace } from "./types.ts";
+import { WORKSPACE_FORMAT_VERSION } from "./types.ts";
+import { workspaceSchema } from "./schema.ts";
 
 export function serializeWorkspace(workspace: Workspace): PersistedWorkspace {
   return { version: WORKSPACE_FORMAT_VERSION, workspace };

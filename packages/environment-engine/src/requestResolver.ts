@@ -1,5 +1,5 @@
 import type { KeyValueRow } from "@api-lab/shared";
-import { resolveVariables } from "./resolver";
+import { resolveVariables } from "./resolver.ts";
 
 /** The subset of a request's fields that can contain `{{variable}}`
  * references. Deliberately duck-typed against `@api-lab/shared`'s

@@ -1,6 +1,6 @@
 import type { ApiResponseResult } from "@api-lab/request-engine";
 import { evaluateJsonPath } from "@api-lab/test-engine";
-import type { Extraction, ExtractionResult } from "./types";
+import type { Extraction, ExtractionResult } from "./types.ts";
 
 function jsonValueToString(value: unknown): string {
   if (typeof value === "string") return value;

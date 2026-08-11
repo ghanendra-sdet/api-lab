@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ApiResponseResult } from "@api-lab/request-engine";
-import { extractAll, extractValue } from "./extract";
-import { createExtraction } from "./factory";
-import type { Extraction } from "./types";
+import { extractAll, extractValue } from "./extract.ts";
+import { createExtraction } from "./factory.ts";
+import type { Extraction } from "./types.ts";
 
 function response(overrides: Partial<ApiResponseResult> = {}): ApiResponseResult {
   return {

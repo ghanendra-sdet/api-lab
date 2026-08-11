@@ -1,4 +1,4 @@
-import type { Collection, CollectionItem, Folder, SavedRequest, Workspace } from "./types";
+import type { Collection, CollectionItem, Folder, SavedRequest, Workspace } from "./types.ts";
 
 export function isFolder(item: CollectionItem): item is Folder {
   return item.type === "folder";

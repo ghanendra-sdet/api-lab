@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildTestResult } from "./testResult";
-import type { AssertionResult } from "./types";
-import { createAssertion } from "./factory";
+import { buildTestResult } from "./testResult.ts";
+import type { AssertionResult } from "./types.ts";
+import { createAssertion } from "./factory.ts";
 
 function assertionResult(passed: boolean): AssertionResult {
   return { assertion: createAssertion("status"), passed, actual: "200", expected: "200", message: "" };

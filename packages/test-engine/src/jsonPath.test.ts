@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateJsonPath } from "./jsonPath";
+import { evaluateJsonPath } from "./jsonPath.ts";
 
 describe("evaluateJsonPath", () => {
   it("returns the root value for $", () => {

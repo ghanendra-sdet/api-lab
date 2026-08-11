@@ -1,5 +1,5 @@
-import type { RequestLocation, Workspace } from "./types";
-import { withItemsAtLocation } from "./internal";
+import type { RequestLocation, Workspace } from "./types.ts";
+import { withItemsAtLocation } from "./internal.ts";
 
 function swap<T>(array: T[], index: number, direction: "up" | "down"): T[] {
   const target = direction === "up" ? index - 1 : index + 1;

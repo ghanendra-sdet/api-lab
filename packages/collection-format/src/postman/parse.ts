@@ -1,4 +1,4 @@
-import { postmanCollectionSchema, postmanEnvironmentSchema, type PostmanCollection, type PostmanEnvironment } from "./schema";
+import { postmanCollectionSchema, postmanEnvironmentSchema, type PostmanCollection, type PostmanEnvironment } from "./schema.ts";
 
 export type PostmanParseResult<T> =
   | { ok: true; data: T }

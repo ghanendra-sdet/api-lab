@@ -1,4 +1,4 @@
-import type { DatasetParseResult, DatasetRow } from "./types";
+import type { DatasetParseResult, DatasetRow } from "./types.ts";
 
 /** A dataset larger than this is rejected before parsing — the Runner
  * re-executes the entire collection once per row, so an unbounded dataset

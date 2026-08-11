@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildRequest } from "./buildRequest";
-import type { ApiRequestConfig } from "./types";
+import { buildRequest } from "./buildRequest.ts";
+import type { ApiRequestConfig } from "./types.ts";
 
 function baseConfig(overrides: Partial<ApiRequestConfig> = {}): ApiRequestConfig {
   return {

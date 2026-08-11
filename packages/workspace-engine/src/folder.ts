@@ -1,6 +1,6 @@
-import type { Folder, Workspace } from "./types";
-import { createWorkspaceId } from "./id";
-import { findCollection, isFolder, replaceCollection, touch } from "./internal";
+import type { Folder, Workspace } from "./types.ts";
+import { createWorkspaceId } from "./id.ts";
+import { findCollection, isFolder, replaceCollection, touch } from "./internal.ts";
 
 export function createFolder(
   workspace: Workspace,

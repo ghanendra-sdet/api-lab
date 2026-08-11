@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createCollection, createFolder, createRequest } from "@api-lab/workspace-engine";
 import { createEmptyEnvironmentWorkspace, createEnvironment, addVariable, updateVariable } from "@api-lab/environment-engine";
-import { emptyRequestConfig } from "../internal";
-import { exportNativeWorkspace } from "./export";
-import { parseNativeExport, adaptNativeExport } from "./import";
-import { NATIVE_FORMAT_VERSION } from "./schema";
+import { emptyRequestConfig } from "../internal.ts";
+import { exportNativeWorkspace } from "./export.ts";
+import { parseNativeExport, adaptNativeExport } from "./import.ts";
+import { NATIVE_FORMAT_VERSION } from "./schema.ts";
 
 describe("native export/import round-trip", () => {
   it("stamps the current format version", () => {
