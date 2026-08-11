@@ -121,26 +121,37 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Status code assertions | P0 | 7 | Planned |
-| Header assertions | P0 | 7 | Planned |
-| JSON body assertions | P0 | 7 | Planned |
-| JSON Schema validation | P1 | 7 | Planned |
-| JSONPath extraction/assertion | P1 | 7 | Planned |
-| Response-time assertions | P1 | 7 | Planned |
-| Pre-request scripts (sandboxed) | P0 | 7 | Planned |
-| Post-response scripts (sandboxed) | P0 | 7 | Planned |
-| Test result reporting (per-request) | P0 | 7 | Planned |
+| Status code assertions (equals/notEquals/greaterThan/lessThan/…) | P0 | 7 | Done |
+| Status range assertions (2xx/3xx/4xx/5xx) | P0 | 7 | Done |
+| Header assertions (exists/notExists/equals/contains, case-insensitive name) | P0 | 7 | Done |
+| Body assertions (contains/notContains/equals/exists/notExists/matches) | P0 | 7 | Done |
+| JSON body assertions | P0 | 7 | Done |
+| JSONPath extraction/assertion (documented subset: `$.a.b[0].c`) | P1 | 7 | Done |
+| JSON Schema validation | P1 | 7 | Deferred (mature-validator integration is a near-term follow-up, not implemented this milestone — see docs/ARCHITECTURE.md) |
+| Response-time assertions | P1 | 7 | Done (documents that browser timing ≠ server-side load-test timing) |
+| Response-size assertions | P1 | 7 | Done |
+| Assertion builder UI (no-code, guided) | P0 | 7 | Done |
+| Assertions saved with requests + backward compatibility | P0 | 7 | Done |
+| Test result reporting (per-request, pass/fail/error/skipped) | P0 | 7 | Done |
+| Pre-request scripts (sandboxed) | P0 | 7 | Deferred — editing surface exists, execution intentionally not implemented (see docs/SECURITY.md) |
+| Post-response scripts (sandboxed) | P0 | 7 | Deferred — same as above |
 
 ## Collection Runner
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Sequential collection execution | P0 | 8 | Planned |
+| Sequential collection execution | P0 | 7 | Done (foundation shipped in Milestone 7, ahead of the original Milestone 8 placement — see docs/ROADMAP.md) |
+| Request selection (run all / run selected) | P0 | 7 | Done |
+| Environment selection for run | P0 | 7 | Done |
+| Stop-on-failure / continue-on-failure | P0 | 7 | Done |
+| Run cancellation | P0 | 7 | Done |
+| Run result reporting (summary + per-request detail) | P0 | 7 | Done |
 | Iterations | P0 | 8 | Planned |
 | Inter-request delay | P1 | 8 | Planned |
-| Environment selection for run | P0 | 8 | Planned |
 | Data-driven execution (CSV) | P1 | 8 | Planned |
 | Data-driven execution (JSON) | P1 | 8 | Planned |
+| Request chaining (extract → reuse values) | P1 | 8 | Deferred — no safe scripting mechanism yet; result model designed to support it later (see docs/ARCHITECTURE.md) |
+| Parallel execution | P2 | Future | Explicit non-goal for the Runner; performance testing (Milestone 10) has its own execution architecture |
 | Run reports (exportable) | P0 | 8 | Planned |
 
 ## Mock API Engine

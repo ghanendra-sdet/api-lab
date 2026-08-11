@@ -6,6 +6,7 @@ import type {
   RequestPanelId,
 } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
+import type { Assertion } from "@api-lab/test-engine";
 import type { RequestConfig, RequestLocation } from "@api-lab/workspace-engine";
 
 /** The full editable state of one open request tab. */
@@ -23,7 +24,10 @@ export interface RequestTabState {
   bodyRawContent: string;
   preRequestScript: string;
   postResponseScript: string;
-  testsScript: string;
+  /** Structured, non-executable assertions — see @api-lab/test-engine.
+   * Replaces the Milestone 1-6 free-text `testsScript` placeholder now
+   * that a real (script-free) test engine exists. */
+  tests: Assertion[];
 
   /**
    * Set only when this tab is linked to a saved request — undefined means

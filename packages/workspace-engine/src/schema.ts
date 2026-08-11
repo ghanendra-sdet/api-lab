@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BODY_MODES, BODY_RAW_FORMATS, HTTP_METHODS } from "@api-lab/shared";
 import { authConfigSchema } from "@api-lab/auth-engine";
+import { assertionSchema } from "@api-lab/test-engine";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
 const bodyModeSchema = z.enum([...BODY_MODES]);
@@ -28,6 +29,9 @@ const requestConfigSchema = z.object({
   bodyMode: bodyModeSchema,
   bodyRawFormat: bodyRawFormatSchema,
   bodyRawContent: z.string(),
+  // Backward compatibility (Milestone 7): requests saved before this
+  // milestone have no `tests` field at all — default to no assertions.
+  tests: z.array(assertionSchema).default([]),
 });
 
 const savedRequestSchema = z.object({

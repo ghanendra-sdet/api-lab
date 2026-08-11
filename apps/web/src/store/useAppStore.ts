@@ -1,13 +1,6 @@
 import { create } from "zustand";
 import type { HttpMethod, KeyValueRow, RequestPanelId, ThemeMode } from "@api-lab/shared";
-import {
-  BrowserFetchExecutor,
-  buildRequest,
-  validateJsonBody,
-  validateUrl,
-  type ApiResponseResult,
-  type ValidationError,
-} from "@api-lab/request-engine";
+import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine";
 import {
   createCollection as wsCreateCollection,
   createFolder as wsCreateFolder,
@@ -31,32 +24,36 @@ import {
 } from "@api-lab/workspace-engine";
 import {
   addVariable as envAddVariable,
-  buildVariableContext,
   createEmptyEnvironmentWorkspace,
   createEnvironment as envCreateEnvironment,
   deleteEnvironment as envDeleteEnvironment,
   duplicateEnvironment as envDuplicateEnvironment,
   removeVariable as envRemoveVariable,
   renameEnvironment as envRenameEnvironment,
-  resolveRequestConfig,
   setActiveEnvironment as envSetActiveEnvironment,
   updateVariable as envUpdateVariable,
   type EnvironmentWorkspace,
   type Variable,
 } from "@api-lab/environment-engine";
-import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
+import type { AuthConfig } from "@api-lab/auth-engine";
 import type {
   NormalizedCollectionImport,
   NormalizedEnvironmentImport,
   NormalizedWorkspaceImport,
 } from "@api-lab/collection-format";
+import { createAssertion, type Assertion, type TestResult } from "@api-lab/test-engine";
 import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
-import { resolveAuthConfig } from "../lib/authResolve";
 import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
+import { executeRequestConfig } from "../lib/executeRequest";
+import {
+  flattenCollectionRequests,
+  createIdleRunnerState,
+  type RunnerState,
+} from "../lib/runner";
 import {
   loadEnvironmentsFromStorage,
   loadTabsFromStorage,
@@ -67,8 +64,6 @@ import {
   saveTabsToStorage,
   saveWorkspaceToStorage,
 } from "../lib/persistence";
-
-const executor = new BrowserFetchExecutor();
 
 function getPreferredTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";
@@ -207,16 +202,28 @@ interface AppState {
   setBodyRawContent: (tabId: string, content: string) => void;
   setPreRequestScript: (tabId: string, script: string) => void;
   setPostResponseScript: (tabId: string, script: string) => void;
-  setTestsScript: (tabId: string, script: string) => void;
+
+  // Assertions (tests)
+  addAssertion: (tabId: string) => string;
+  updateAssertion: (tabId: string, assertionId: string, patch: Partial<Omit<Assertion, "id">>) => void;
+  removeAssertion: (tabId: string, assertionId: string) => void;
 
   // Request execution
   requestStatus: Record<string, "idle" | "loading">;
   responses: Record<string, ApiResponseResult | undefined>;
+  testResults: Record<string, TestResult | undefined>;
   sendErrors: Record<string, ValidationError | undefined>;
   abortControllers: Record<string, AbortController>;
   sendRequest: (tabId: string) => Promise<void>;
   cancelRequest: (tabId: string) => void;
   resetRequest: (tabId: string) => void;
+
+  // Collection Runner
+  runnerState: RunnerState;
+  runnerAbortController: AbortController | null;
+  startRunner: (collectionId: string, requestIds: string[], environmentId: string | null, stopOnFailure: boolean) => Promise<void>;
+  cancelRunner: () => void;
+  resetRunner: () => void;
 }
 
 function newRow(): KeyValueRow {
@@ -510,11 +517,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { preRequestScript }) })),
   setPostResponseScript: (tabId, postResponseScript) =>
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { postResponseScript }) })),
-  setTestsScript: (tabId, testsScript) =>
-    set((s) => ({ tabs: updateTab(s.tabs, tabId, { testsScript }) })),
+
+  addAssertion: (tabId) => {
+    const assertion = createAssertion("status");
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, (tab) => ({ tests: [...tab.tests, assertion] })) }));
+    return assertion.id;
+  },
+  updateAssertion: (tabId, assertionId, patch) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        tests: tab.tests.map((a) => (a.id === assertionId ? { ...a, ...patch } : a)),
+      })),
+    })),
+  removeAssertion: (tabId, assertionId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        tests: tab.tests.filter((a) => a.id !== assertionId),
+      })),
+    })),
 
   requestStatus: {},
   responses: {},
+  testResults: {},
   sendErrors: {},
   abortControllers: {},
 
@@ -526,90 +550,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const activeEnvironment = state.environments.environments.find(
       (e) => e.id === state.environments.activeEnvironmentId,
     );
-    const context = buildVariableContext(activeEnvironment);
-    const resolution = resolveRequestConfig(
-      { url: tab.url, params: tab.params, headers: tab.headers, bodyRawContent: tab.bodyRawContent },
-      context,
-    );
-
-    if (resolution.hasCircularReference) {
-      set((s) => ({
-        sendErrors: {
-          ...s.sendErrors,
-          [tabId]: {
-            field: "variables",
-            message: "Circular variable reference detected. Fix the environment's variable values before sending.",
-          },
-        },
-      }));
-      return;
-    }
-
-    if (resolution.unresolvedVariables.length > 0) {
-      set((s) => ({
-        sendErrors: {
-          ...s.sendErrors,
-          [tabId]: {
-            field: "variables",
-            message: `Unresolved variable${resolution.unresolvedVariables.length > 1 ? "s" : ""}: ${resolution.unresolvedVariables.join(", ")}. Select an environment that defines ${resolution.unresolvedVariables.length > 1 ? "them" : "it"}, or remove the reference.`,
-          },
-        },
-      }));
-      return;
-    }
-
-    const resolved = resolution.resolved;
-
-    // Auth fields (API key value, username/password, bearer/JWT token) can
-    // also reference {{variables}} — resolve them through the same
-    // environment context before validating or applying the auth config.
-    const authResolution = resolveAuthConfig(tab.auth, context);
-    if (authResolution.hasCircularReference) {
-      set((s) => ({
-        sendErrors: {
-          ...s.sendErrors,
-          [tabId]: {
-            field: "variables",
-            message: "Circular variable reference detected in the authorization configuration.",
-          },
-        },
-      }));
-      return;
-    }
-    if (authResolution.unresolvedVariables.length > 0) {
-      set((s) => ({
-        sendErrors: {
-          ...s.sendErrors,
-          [tabId]: {
-            field: "variables",
-            message: `Unresolved variable${authResolution.unresolvedVariables.length > 1 ? "s" : ""} in authorization: ${authResolution.unresolvedVariables.join(", ")}.`,
-          },
-        },
-      }));
-      return;
-    }
-
-    const authError = validateAuthConfig(authResolution.resolved);
-    if (authError) {
-      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: authError } }));
-      return;
-    }
-
-    // Auth-generated headers/params take precedence over manually entered
-    // ones with the same name — see auth-engine's applyAuth docstring for
-    // the documented precedence rule.
-    const withAuth = applyAuth(authResolution.resolved, resolved.headers, resolved.params);
-
-    const urlError = validateUrl(resolved.url);
-    if (urlError) {
-      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: urlError } }));
-      return;
-    }
-    const bodyError = validateJsonBody(tab.bodyMode, tab.bodyRawFormat, resolved.bodyRawContent);
-    if (bodyError) {
-      set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: bodyError } }));
-      return;
-    }
 
     set((s) => ({
       sendErrors: { ...s.sendErrors, [tabId]: undefined },
@@ -619,26 +559,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     const controller = new AbortController();
     set((s) => ({ abortControllers: { ...s.abortControllers, [tabId]: controller } }));
 
-    const built = buildRequest({
-      id: tab.id,
-      name: tab.name,
-      method: tab.method,
-      url: resolved.url,
-      queryParams: withAuth.params,
-      headers: withAuth.headers,
-      authType: tab.auth.type,
-      bodyMode: tab.bodyMode,
-      bodyRawFormat: tab.bodyRawFormat,
-      bodyRawContent: resolved.bodyRawContent,
-    });
-
-    const result = await executor.execute(built, { signal: controller.signal });
+    const outcome = await executeRequestConfig(
+      tab.id,
+      tab.name,
+      tabToRequestConfig(tab),
+      activeEnvironment,
+      controller.signal,
+    );
 
     set((s) => {
       const remainingControllers = { ...s.abortControllers };
       delete remainingControllers[tabId];
+
+      if (!outcome.ok) {
+        return {
+          sendErrors: { ...s.sendErrors, [tabId]: outcome.validationError },
+          requestStatus: { ...s.requestStatus, [tabId]: "idle" },
+          abortControllers: remainingControllers,
+        };
+      }
+
       return {
-        responses: { ...s.responses, [tabId]: result },
+        responses: { ...s.responses, [tabId]: outcome.response },
+        testResults: { ...s.testResults, [tabId]: outcome.testResult },
         requestStatus: { ...s.requestStatus, [tabId]: "idle" },
         abortControllers: remainingControllers,
       };
@@ -657,10 +600,83 @@ export const useAppStore = create<AppState>((set, get) => ({
         auth: { type: "none" },
         bodyMode: "none",
         bodyRawContent: "",
+        tests: [],
       }),
       responses: { ...s.responses, [tabId]: undefined },
+      testResults: { ...s.testResults, [tabId]: undefined },
       sendErrors: { ...s.sendErrors, [tabId]: undefined },
     })),
+
+  runnerState: createIdleRunnerState(),
+  runnerAbortController: null,
+
+  startRunner: async (collectionId, requestIds, environmentId, stopOnFailure) => {
+    const state = get();
+    const collection = state.workspace.collections.find((c) => c.id === collectionId);
+    if (!collection) return;
+
+    const requested = new Set(requestIds);
+    const flat = flattenCollectionRequests(collection).filter((r) => requested.has(r.id));
+    const environment = state.environments.environments.find((e) => e.id === environmentId);
+    const controller = new AbortController();
+
+    set({
+      runnerAbortController: controller,
+      runnerState: {
+        status: "running",
+        collectionId,
+        environmentId,
+        stopOnFailure,
+        items: flat.map((r) => ({ requestId: r.id, name: r.name, status: "pending" })),
+        startedAt: Date.now(),
+      },
+    });
+
+    for (const req of flat) {
+      if (controller.signal.aborted) break;
+
+      set((s) => ({
+        runnerState: {
+          ...s.runnerState,
+          items: s.runnerState.items.map((i) => (i.requestId === req.id ? { ...i, status: "running" } : i)),
+        },
+      }));
+
+      const outcome = await executeRequestConfig(req.id, req.name, req.request, environment, controller.signal);
+      if (controller.signal.aborted) break;
+
+      const itemStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
+      set((s) => ({
+        runnerState: {
+          ...s.runnerState,
+          items: s.runnerState.items.map((i) =>
+            i.requestId === req.id
+              ? { ...i, status: itemStatus, response: outcome.response, testResult: outcome.testResult, validationError: outcome.validationError }
+              : i,
+          ),
+        },
+      }));
+
+      if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error")) break;
+    }
+
+    const wasCancelled = controller.signal.aborted;
+    set((s) => ({
+      runnerAbortController: null,
+      runnerState: {
+        ...s.runnerState,
+        status: wasCancelled ? "cancelled" : "completed",
+        items: s.runnerState.items.map((i) => (i.status === "pending" ? { ...i, status: wasCancelled ? "cancelled" : "skipped" } : i)),
+        durationMs: Date.now() - (s.runnerState.startedAt ?? Date.now()),
+      },
+    }));
+  },
+
+  cancelRunner: () => {
+    get().runnerAbortController?.abort();
+  },
+
+  resetRunner: () => set({ runnerState: createIdleRunnerState(), runnerAbortController: null }),
 }));
 
 export function useActiveTab(): RequestTabState {

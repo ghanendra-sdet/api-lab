@@ -10,6 +10,7 @@ export function sampleRequestConfig(overrides: Partial<RequestConfig> = {}): Req
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",
+    tests: [],
     ...overrides,
   };
 }

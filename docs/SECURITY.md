@@ -1,12 +1,14 @@
 # API Lab — Security Model
 
-API Lab's most significant security surface is that it will eventually execute **user-authored JavaScript** (pre-request and post-response scripts) and make **arbitrary outbound HTTP requests** to endpoints the user configures. Both are normal, necessary features of an API client — and both are exactly the kind of capability that has to be designed securely *before* it's built, not hardened afterward. This document is that design. It must be reviewed and current before Milestone 7 (API Testing Engine, which introduces script execution) begins.
+API Lab's most significant security surface is that it will eventually execute **user-authored JavaScript** (pre-request and post-response scripts) and make **arbitrary outbound HTTP requests** to endpoints the user configures. Both are normal, necessary features of an API client — and both are exactly the kind of capability that has to be designed securely *before* it's built, not hardened afterward. This document is that design.
+
+**Status as of Milestone 7**: script execution is **not implemented**. Milestone 7 (API Testing Engine) evaluated implementing it and explicitly deferred, per its own instruction that "if a fully safe user-script runtime cannot be implemented confidently in this milestone, implement the assertion engine and runner first, and explicitly defer script execution rather than introducing an unsafe mechanism." This document's Script Execution Sandbox section below remains the requirements a future dedicated milestone must satisfy before `script-engine` is built — it is a design-ahead-of-implementation document, not a description of something already running.
 
 ## Threat Model Summary
 
 | Surface | Risk if unaddressed |
 |---|---|
-| User-authored scripts | Arbitrary code execution in the app's context; access to other collections' data, stored credentials, or the DOM |
+| User-authored scripts | Arbitrary code execution in the app's context; access to other collections' data, stored credentials, or the DOM. **Not yet a live risk** — script execution is not implemented (Milestone 7 deferred it); this row stays as a design requirement for when it is. |
 | User-configured request targets | Server-Side Request Forgery if any part of API Lab runs server-side and blindly proxies a user-supplied URL |
 | Response rendering | Stored/reflected XSS if a response body is rendered as HTML/executed rather than displayed as inert text |
 | Imported collections (Postman/OpenAPI) | Malicious or malformed import data used as an injection vector into the app's own state or storage |
@@ -17,7 +19,9 @@ API Lab's most significant security surface is that it will eventually execute *
 
 **Principle**: no user-authored script executes in the same JavaScript context as the main application. This is non-negotiable — `script-engine` is architected around isolation from day one, not retrofitted.
 
-Requirements for the sandbox, to be finalized as a concrete implementation decision before Milestone 7:
+**Current state (post-Milestone 7)**: `tab.preRequestScript`/`tab.postResponseScript` are a plain-text editing surface only. No code path reads them during request execution — `apps/web/src/lib/executeRequest.ts`'s `executeRequestConfig` (the single pipeline both the Send button and the Collection Runner use) never references either field. This was verified directly: an E2E test types a script designed to prove execution (`console.log("SCRIPT_SHOULD_NOT_RUN")`, `document.title = "hacked"`) and confirms neither effect occurs after Send. There is currently no `script-engine` package and no sandbox — because there is nothing to sandbox yet.
+
+Requirements for the sandbox, to be finalized as a concrete implementation decision when a future milestone takes on script execution:
 
 - **Isolation**: the script runs in a context (Web Worker, iframe-based isolate, or WASM sandbox — see `ARCHITECTURE.md` Open Question 3) with no direct reference to `apps/web`'s state, DOM, or `window`.
 - **Explicit API surface only**: a script can read/write environment variables and inspect the current request/response through a deliberately narrow, documented API — never through ambient access to the app's internals.
@@ -102,6 +106,23 @@ Imported files (Postman Collections, Postman Environments, OpenAPI documents, AP
 - **Non-destructive collision handling.** A name collision with an existing collection/environment gets a distinguishing suffix (`"X (Imported)"`), never a silent overwrite.
 - **Export never leaks internal execution state.** `exportPostmanCollection`/`exportNativeWorkspace` are pure functions over `workspace-engine`/`environment-engine` domain types, which structurally cannot contain React state, `AbortController`s, in-flight request status, or response history — there is nothing to accidentally serialize, because the exporters never see it in the first place.
 
+## Testing Engine — Assertions & JSONPath (Milestone 7)
+
+Assertions and JSON-path expressions are user-authored but never executed as code — reviewed specifically for this because both look, superficially, like the kind of thing that invites a "just eval it" shortcut:
+
+- **Closed assertion model, not an expression language.** `Assertion` is `{target, operator, key?, expected, enabled}` drawn from a fixed set of 7 targets and 11 operators (`test-engine/types.ts`'s `OPERATORS_BY_TARGET`). There is no way to author an assertion that isn't one of these known (target, operator) pairs — the UI can't produce one, and the Zod schema rejects an unknown `target`/`operator` string on import/load.
+- **JSONPath is a hand-written, documented subset — not a library, not `eval`.** `evaluateJsonPath` parses `$.a.b[0].c` with two regexes matching property-access and array-index segments only; there is no code-generation, no `new Function(path)`, no expression compilation. An unsupported construct (wildcards, filters, recursive descent) is rejected outright rather than partially interpreted.
+- **The one accepted residual risk**: the `matches` operator (body assertions only) constructs a native `RegExp` from user-entered text. This is not code execution, but a pathologically crafted pattern (e.g. catastrophic backtracking) could make evaluation slow — the same class of risk any application accepting a user-supplied regex has. Not mitigated in Milestone 7; flagged for Milestone 12 (Security Hardening) rather than silently accepted as a non-issue.
+- **Assertions never mutate the response they evaluate.** Verified by a regression test that snapshots an `ApiResponseResult` before and after `evaluateAssertions` runs against it.
+- **Assertion evaluation errors are contained.** A malformed JSON path, an assertion against a non-JSON body, or a non-numeric `expected` value on a numeric target produces a typed `AssertionResult.error`, never an uncaught exception that could interrupt the surrounding Send/Run flow.
+
+## Collection Runner (Milestone 7)
+
+- **No new execution surface.** The Runner calls the exact same `executeRequestConfig` pipeline a manual Send does — it does not introduce a second, less-reviewed code path for sending requests, applying auth, or evaluating assertions.
+- **Isolated from open-tab state.** Runner execution reads `workspace`/`environments` but never reads or writes `tabs`, `responses`, `sendErrors`, or any other tab-scoped state — a malicious or malformed saved request executed by the Runner cannot corrupt an open tab's in-progress edits. Verified by a regression test.
+- **Cancellation is real, not cosmetic.** `AbortController` is threaded through to the underlying `fetch` (via the shared `BrowserFetchExecutor`), and the signal is checked both before starting the next request and after the current one resolves — a cancelled run reports `Cancelled`, never a false `Passed`/`Completed`, and an in-flight request's result is discarded rather than raced into the result list.
+- **Sequential only.** No parallel execution exists in the Runner, so there's no shared-mutable-state-across-concurrent-requests class of bug to review here; that risk is deferred to whichever future milestone (if any) considers concurrent Runner execution.
+
 ## Review Cadence
 
-This document is revisited at the start of Milestone 7 (before script execution is implemented) and again at Milestone 12 (dedicated Security Hardening milestone), and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.
+This document is revisited whenever script execution is next considered (before any `script-engine` implementation begins — see the Script Execution Sandbox section's current-state note) and again at Milestone 12 (dedicated Security Hardening milestone), and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.

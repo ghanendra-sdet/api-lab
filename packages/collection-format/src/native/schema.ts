@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { authConfigSchema } from "@api-lab/auth-engine";
+import { assertionSchema } from "@api-lab/test-engine";
 import { HTTP_METHODS, BODY_MODES, BODY_RAW_FORMATS } from "@api-lab/shared";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
@@ -23,6 +24,7 @@ const requestConfigSchema = z.object({
   bodyMode: bodyModeSchema,
   bodyRawFormat: bodyRawFormatSchema,
   bodyRawContent: z.string(),
+  tests: z.array(assertionSchema).default([]),
 });
 
 const savedRequestSchema = z.object({

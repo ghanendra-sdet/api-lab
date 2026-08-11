@@ -125,3 +125,48 @@ describe("Milestone 5 backward compatibility: pre-auth saved requests", () => {
     }
   });
 });
+
+describe("Milestone 7 backward compatibility: pre-tests saved requests", () => {
+  it("loads a request saved before Milestone 7 (no tests field) and defaults to no assertions", () => {
+    const legacyPersisted = {
+      version: 1,
+      workspace: {
+        collections: [
+          {
+            id: "c1",
+            name: "Legacy Collection",
+            items: [
+              {
+                id: "r1",
+                type: "request",
+                name: "Old Request",
+                request: {
+                  method: "GET",
+                  url: "https://example.com",
+                  params: [],
+                  headers: [],
+                  auth: { type: "none" },
+                  bodyMode: "none",
+                  bodyRawFormat: "JSON",
+                  bodyRawContent: "",
+                  // No `tests` field — request saved before Milestone 7.
+                },
+                createdAt: "2024-01-01T00:00:00.000Z",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              },
+            ],
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const result = deserializeWorkspace(legacyPersisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const request = result.workspace.collections[0]!.items[0];
+      expect(request && "request" in request && request.request.tests).toEqual([]);
+    }
+  });
+});

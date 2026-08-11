@@ -1,10 +1,11 @@
 import type { BodyMode, BodyRawFormat, HttpMethod, KeyValueRow } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
+import type { Assertion } from "@api-lab/test-engine";
 
 /**
  * The persisted, request-engine-agnostic shape of a request's configuration.
- * Deliberately excludes scripts/tests/environment fields — those belong to
- * their own milestones and are not part of the collection format yet (see
+ * Deliberately excludes scripts/environment fields — those belong to their
+ * own milestones and are not part of the collection format yet (see
  * docs/ROADMAP.md). Designed so those fields can be added later without
  * breaking existing saved data (additive, optional fields).
  *
@@ -14,6 +15,10 @@ import type { AuthConfig } from "@api-lab/auth-engine";
  * have no `auth` field at all; schema.ts defaults it to `{ type: "none" }`
  * on load rather than attempting to reconstruct real credentials that were
  * never stored — see docs/ARCHITECTURE.md's Milestone 5 section.
+ *
+ * `tests` (Milestone 7) is a list of serializable, non-executable
+ * assertions — see @api-lab/test-engine. Requests saved before Milestone 7
+ * have no `tests` field; schema.ts defaults it to `[]` on load.
  */
 export interface RequestConfig {
   method: HttpMethod;
@@ -24,6 +29,7 @@ export interface RequestConfig {
   bodyMode: BodyMode;
   bodyRawFormat: BodyRawFormat;
   bodyRawContent: string;
+  tests: Assertion[];
 }
 
 export interface SavedRequest {

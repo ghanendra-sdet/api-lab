@@ -10,6 +10,7 @@ function config(overrides: Partial<RequestConfig>): RequestConfig {
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",
+    tests: [],
     ...overrides,
   };
 }

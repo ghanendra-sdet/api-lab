@@ -5,6 +5,7 @@ import { useAppStore } from "../../store/useAppStore";
 import { downloadJson, slugifyFilename } from "../../lib/importExport";
 import { RequestItem } from "./RequestItem";
 import { FolderItem } from "./FolderItem";
+import { RunnerDialog } from "../runner/RunnerDialog";
 
 interface CollectionItemProps {
   collection: Collection;
@@ -12,6 +13,7 @@ interface CollectionItemProps {
 
 export function CollectionItem({ collection }: CollectionItemProps) {
   const [expanded, setExpanded] = useState(true);
+  const [runnerOpen, setRunnerOpen] = useState(false);
   const panelId = `collection-panel-${collection.id}`;
   const renameCollection = useAppStore((s) => s.renameCollection);
   const deleteCollection = useAppStore((s) => s.deleteCollection);
@@ -100,6 +102,15 @@ export function CollectionItem({ collection }: CollectionItemProps) {
           </button>
           <button
             type="button"
+            onClick={() => setRunnerOpen(true)}
+            aria-label={`Run ${collection.name}`}
+            title="Run Collection"
+            className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            ▶
+          </button>
+          <button
+            type="button"
             onClick={handleExportPostman}
             aria-label={`Export ${collection.name} as Postman`}
             title="Export as Postman Collection"
@@ -142,6 +153,7 @@ export function CollectionItem({ collection }: CollectionItemProps) {
           )}
         </ul>
       )}
+      {runnerOpen && <RunnerDialog collection={collection} onClose={() => setRunnerOpen(false)} />}
     </li>
   );
 }

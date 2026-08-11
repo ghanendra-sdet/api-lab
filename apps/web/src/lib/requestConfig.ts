@@ -11,6 +11,7 @@ export function tabToRequestConfig(tab: RequestTabState): RequestConfig {
     bodyMode: tab.bodyMode,
     bodyRawFormat: tab.bodyRawFormat,
     bodyRawContent: tab.bodyRawContent,
+    tests: tab.tests,
   };
 }
 
@@ -24,6 +25,7 @@ export function requestConfigToTabFields(config: RequestConfig): Partial<Request
     bodyMode: config.bodyMode,
     bodyRawFormat: config.bodyRawFormat,
     bodyRawContent: config.bodyRawContent,
+    tests: config.tests,
   };
 }
 

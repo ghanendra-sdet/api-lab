@@ -10,6 +10,8 @@
 //   GET  /empty                       -> 204 No Content
 //   GET  /text                        -> 200 text/plain
 //   GET  /html                        -> 200 text/html
+//   GET  /json                        -> 200 JSON: fixed nested object, for JSON-path assertion tests
+//   GET  /delay/:ms                   -> 200 after a deterministic delay, for response-time/cancellation tests
 import { createServer } from "node:http";
 
 const PORT = 4001;
@@ -82,6 +84,22 @@ const server = createServer((req, res) => {
     withCors(res);
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end("<p>Hello from the fixture server</p>");
+    return;
+  }
+
+  if (url.pathname === "/json") {
+    sendJson(res, 200, {
+      id: 123,
+      user: { name: "Ada", active: true },
+      items: [{ id: 1, label: "first" }, { id: 2, label: "second" }],
+    });
+    return;
+  }
+
+  const delayMatch = url.pathname.match(/^\/delay\/(\d+)$/);
+  if (delayMatch) {
+    const ms = Number(delayMatch[1]);
+    setTimeout(() => sendJson(res, 200, { delayedMs: ms }), ms);
     return;
   }
 
