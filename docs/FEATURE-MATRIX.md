@@ -213,14 +213,72 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 | WebSocket / gRPC / browser-UI load testing | P2 | Future | Deferred |
 | Scheduled performance tests | P2 | Future | Deferred |
 
+## API Contract Testing (OpenAPI)
+
+| Feature | Priority | Phase | Status |
+|---|---:|---:|---|
+| `contract-engine` package (pure, framework-independent) | P0 | 11 | Done |
+| OpenAPI 3.0.x contract validation | P0 | 11 | Done |
+| OpenAPI 3.1.x contract validation | P0 | 11 | Done |
+| OpenAPI YAML ingestion | P1 | 11 | Done (deferred in Milestone 6; `yaml` package's safe default parser) |
+| Normalized contract model (info/servers/paths/operations/params/bodies/responses/headers/schemas/security) | P0 | 11 | Done |
+| Deterministic operation resolution (literal beats template) | P0 | 11 | Done |
+| Ambiguous-operation reporting (never a silent guess) | P0 | 11 | Done |
+| Request validation — path / query / header / cookie parameters | P0 | 11 | Done |
+| Request validation — required parameters, types, enums | P0 | 11 | Done |
+| Request validation — body schema and Content-Type | P0 | 11 | Done |
+| Pre-send request validation that blocks the send | P1 | 11 | Done (opt-in, off by default) |
+| Response validation — status code (exact → `2XX` range → `default`) | P0 | 11 | Done |
+| Response validation — Content-Type (parameters and `+json` suffix aware) | P0 | 11 | Done |
+| Response validation — declared response headers | P1 | 11 | Done |
+| Response validation — JSON body against schema | P0 | 11 | Done |
+| JSON Schema keywords: type/required/properties/items/enum/const | P0 | 11 | Done |
+| JSON Schema keywords: min/max, minLength/maxLength, pattern, multipleOf | P0 | 11 | Done |
+| JSON Schema keywords: minItems/maxItems/uniqueItems | P1 | 11 | Done |
+| JSON Schema keywords: additionalProperties / patternProperties / propertyNames | P0 | 11 | Done |
+| JSON Schema keywords: oneOf / anyOf / allOf / not / if-then-else | P0 | 11 | Done |
+| `$ref` / `$defs` / `#/components/schemas` resolution (including recursive) | P0 | 11 | Done |
+| OpenAPI 3.0 `nullable` → 2020-12 null-union translation | P0 | 11 | Done |
+| OpenAPI 3.0 boolean `exclusiveMinimum`/`exclusiveMaximum` translation | P1 | 11 | Done |
+| Precise violation paths (`$.data.users[2].id`) | P0 | 11 | Done |
+| Multiple violations per result (not first-failure-only) | P1 | 11 | Done |
+| Error / warning severity, warnings never hidden behind a PASS | P0 | 11 | Done |
+| Contract tab UI (specification, resolved operation, violation detail) | P0 | 11 | Done |
+| Attach specification by file import (JSON or YAML) | P0 | 11 | Done |
+| Collection ↔ specification binding (spec never modified) | P0 | 11 | Done |
+| Live response validation from Send | P0 | 11 | Done |
+| Collection Runner contract validation | P0 | 11 | Done |
+| Runner contract summary (passed / failed / warnings) | P1 | 11 | Done |
+| Contract failures reported separately from assertion failures | P0 | 11 | Done (distinct `contract-failed` status) |
+| Data-driven contract testing (dataset variables resolved first) | P1 | 11 | Done |
+| Request chaining + contract validation | P1 | 11 | Done |
+| Mock-server-backed deterministic contract E2E | P0 | 11 | Done |
+| Contract drift detection (collection vs specification) | P1 | 11 | Done |
+| Drift report with All / Missing-from-spec / Missing-from-collection / Changed filters | P1 | 11 | Done |
+| Deterministic drift severity rules | P1 | 11 | Done |
+| Contract coverage (operation coverage + contract test coverage) | P2 | 11 | Done (two separate figures; not code coverage) |
+| Contract test report with drill-down | P1 | 11 | Done |
+| Export contract report as JSON / CSV (metadata only, no secrets) | P2 | 11 | Done |
+| Specification size / operation-count / schema-depth limits | P0 | 11 | Done |
+| Static ReDoS screening of schema `pattern` keywords | P0 | 11 | Done |
+| Compiled-contract caching (keyed by source text) | P1 | 11 | Done |
+| Parameter serialization styles beyond `form` / `simple` | P2 | Future | Deferred — reported as an explicit warning, never silently guessed |
+| Non-JSON request/response body validation (XML, form-data) | P2 | Future | Deferred — reported as a warning |
+| OpenAPI `format` values the validator does not assert (`int32`, `int64`, `date`, `binary`, …) | P2 | Future | Deferred — reported as a warning, never a silent pass |
+| Remote specification fetch by URL | P2 | Future | Deferred — file import only |
+| External `$ref` resolution (other files / URLs) | P2 | Future | Deferred — internal pointers only |
+| OpenAPI editor / API design studio | — | — | Explicit non-goal |
+| GraphQL / gRPC / AsyncAPI / SOAP contract testing | — | — | Explicit non-goal |
+| Consumer-driven Pact workflows | — | — | Explicit non-goal |
+
 ## Documentation Generation
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Endpoint documentation from collection | P1 | 11 | Planned |
-| Request/response examples | P1 | 11 | Planned |
-| Schema documentation | P2 | 11 | Planned |
-| Collection-level documentation | P2 | 11 | Planned |
+| Endpoint documentation from collection | P1 | 13 | Planned |
+| Request/response examples | P1 | 13 | Planned |
+| Schema documentation | P2 | 13 | Planned |
+| Collection-level documentation | P2 | 13 | Planned |
 
 ## Security Hardening
 

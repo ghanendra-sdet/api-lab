@@ -364,3 +364,68 @@ Recorded here rather than silently decided, so they get an explicit answer at th
 15. Dynamic/templated mock response scripting — explicitly out of scope for Milestone 9 (constrained `{{path.x}}`/`{{query.x}}`/`{{header.x}}`/`{{timestamp}}`/`{{requestId}}` built-ins only, never `eval`/`new Function`); a future milestone could add more built-ins to the same fixed-token model without introducing code execution, if a concrete need arises.
 16. OpenAPI → Mock Route generation — deferred; `MockRoute`'s shape (method/path/status/headers/body) was kept simple and independent of `collection-format` specifically so a future adapter can populate it from an OpenAPI document without a boundary change, but no such adapter exists yet (see "As built — Milestone 9" above and spec §24-25).
 17. Cloud/hosted mock server deployment — deferred; the current architecture already keeps `apps/mock-server` a standalone, browser-independent process for exactly this reason (see "As built — Milestone 9"'s browser-can't-be-a-server note), but no hosting/deployment story is built or documented yet.
+
+## As built — Milestone 11 (API Contract Testing & OpenAPI Validation)
+
+Milestone 11 adds `packages/contract-engine`: a pure, framework-independent engine that validates real requests and responses against an OpenAPI 3.0/3.1 contract, detects drift between a collection and its specification, and reports coverage.
+
+### The engine boundary, and why M6's OpenAPI code was left alone
+
+Milestone 6 already parses OpenAPI documents, in `packages/collection-format`. That code was read before a line of M11 was written, and left untouched — no defect was found, and the milestone spec is explicit that contract validation must not be coupled to the import UI.
+
+The two are different **projections of the same documents**, not two ingestion mechanisms:
+
+- M6's schema keeps what is needed to turn operations into runnable saved requests. It drops `responses`, `components.schemas`, and response `headers` entirely, because an importer has no use for them.
+- Contract validation is almost entirely *about* those dropped fields.
+
+Widening M6's schema to serve both would have made every collection import pay to parse response schemas it never reads, and would have tied the import format's evolution to the validator's. The shared rules — the 5MB size limit, the `openapi` version gate, the refusal to throw on malformed input, the recursion guard — are applied identically in both places.
+
+`contract-engine` knows nothing about `RequestConfig`, `Collection`, or Zustand, exactly as `runner-engine` does not (see Milestone 8). The one-way adaptation lives in `apps/web/src/lib/contractAdapt.ts`.
+
+### Choosing the JSON Schema validator: not ajv
+
+The spec required a mature validator rather than a hand-rolled one. ajv is the obvious candidate and was rejected after reading its published source: **ajv compiles each schema into JavaScript and evaluates it with `new Function`** (`ajv/dist/compile/index.js`). API Lab runs in the browser and treats OpenAPI documents as untrusted input, and the milestone's own security requirement is that "contract schemas themselves must not become an execution mechanism". Turning an imported third-party document into generated, evaluated code is the opposite of that, and it forces any deployment to relax its CSP to permit `unsafe-eval`.
+
+`@cfworker/json-schema` was chosen instead: a pure interpreter with **no `new Function` and no `eval`** (verified by inspecting the published bundle), zero runtime dependencies, ESM and CJS builds with bundled types, and support for drafts 4, 7, 2019-09 and 2020-12. It runs unchanged in the browser and under Node, which is what a pure engine package in this repo has to do. It is run with `shortCircuit: false`, because the spec asks for every useful violation rather than only the first.
+
+### One dialect, one explicit 3.0 → 3.1 translation
+
+An obvious alternative was to validate 3.0 documents as draft-4 and 3.1 documents as 2020-12. That was rejected: OpenAPI 3.0's schema object is *not* draft-4. It is a modified subset with its own keyword (`nullable`) that no JSON Schema draft understands, so a dialect switch would leave the 3.0-specific keywords unhandled while doubling the code paths under test.
+
+Instead there is one dialect (2020-12) and one explicit, tested transformation into it, in `schemaNormalize.ts`. The two differences that materially change what validates:
+
+1. **`nullable: true`** — verified empirically: `{type: "string", nullable: true}` *rejects* `null`, because `nullable` is not a JSON Schema keyword and is ignored as an unknown annotation. Left untranslated, every nullable field in every 3.0 document would produce a false contract violation. Translated to `type: ["string", "null"]`.
+2. **Boolean `exclusiveMinimum`/`exclusiveMaximum`** — 3.0 writes `{minimum: 5, exclusiveMinimum: true}`; 2020-12 writes `{exclusiveMinimum: 5}`. Left untranslated the bound is silently dropped and an out-of-range value passes.
+
+These are applied **only** for 3.0 documents. Running them against a 3.1 document would be exactly the "blindly apply 3.0 rules to 3.1" mistake the spec forbids, and would corrupt a legitimate 3.1 schema using `exclusiveMinimum` numerically. Dedicated 3.0 and 3.1 fixtures prove both directions.
+
+### Operation resolution
+
+Matching is deterministic and specificity-ordered, never first-wins: a literal segment always beats a template segment at the same position, so `/users/list` wins over `/users/{id}` for the path `/users/list`. When specificity cannot break a tie — `/users/{id}` versus `/users/{name}` — the result is a reported **ambiguity**, not a guess. Every failure mode is a distinct typed outcome (`unknown-path`, `unknown-method` with the documented methods named, `ambiguous`) because "this path isn't in the contract" and "this path exists but not for POST" are different violations and the UI must be able to say which.
+
+The server base path is stripped before matching (longest match wins), so a request to `http://host/api/v1/users/1` resolves against a contract documenting `/users/{id}` under a server of `http://host/api/v1`.
+
+### Validation pipeline and where it plugs in
+
+Contract validation is wired into the *existing* single execution pipeline in `apps/web/src/lib/executeRequest.ts`, after variables are resolved and authorization is applied, and immediately before the request goes out:
+
+```
+dataset → runtime → environment → request resolution → auth → build
+   → [request contract validation] → HTTP execution → [response contract validation]
+```
+
+That position is the point: the contract is checked against what will actually go on the wire, never against an unresolved `{{userId}}` placeholder, which the spec explicitly forbids. Because there is one pipeline, the request tab's Send and the Collection Runner get identical contract behaviour for free.
+
+Two independent switches, matching the two things the spec asks for. "Validate against contract" (next to Send) validates the response. "Validate request before sending" (on the Contract panel) is the pre-flight check and genuinely **blocks** the send, because the spec is explicit that an invalid request must fail *before* being sent. It is off by default and lives on the panel rather than the toolbar, because a control that can silently refuse to send deserves the explanation there is room for there.
+
+### Contract failures are not assertion failures
+
+The Runner gained a distinct `contract-failed` item status rather than reusing `failed`. A request whose assertions all passed but whose response broke the contract is a genuinely different result from one whose assertions failed, and collapsing both into one ambiguous reason is what the spec forbids. A contract failure is promoted whenever the assertions themselves did not fail — including the very common case of a request with *no* assertions, whose assertion status is `skipped`. An earlier version of this logic only promoted `passed`, which silently hid every contract violation on exactly the requests most likely to rely on contract testing instead of hand-written assertions; that defect was caught by its own unit test.
+
+### Caching
+
+Parsing a specification walks every schema in the document. `parseContractCached` keys on a hash of the source text, so it is correct by construction: editing or re-importing changes the text, which changes the key, which misses the cache. There is no invalidation logic to get wrong. Parse *failures* are cached too, so a broken document is not re-parsed on every re-selection. The store therefore holds only specification **source text** — never a parsed model — so there is no second copy to keep in sync.
+
+### YAML
+
+Milestone 6 deferred OpenAPI YAML. Contract testing is where that stops being reasonable: OpenAPI documents are published as YAML far more often than as JSON, and a contract validator that cannot read the team's actual `openapi.yaml` is one nobody uses. The `yaml` package is used rather than `js-yaml` specifically because its default `parse` is already the safe mode — no constructor tags, no code execution, no object instantiation from the document, and its own alias-expansion budget bounding entity-expansion attacks. The same size limit is applied before parsing either format.
