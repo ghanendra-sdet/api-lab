@@ -8,9 +8,39 @@ import {
   type ApiResponseResult,
   type ValidationError,
 } from "@api-lab/request-engine";
-import type { Collection, EnvironmentOption, RequestTabState } from "../types";
+import {
+  createCollection as wsCreateCollection,
+  createFolder as wsCreateFolder,
+  createRequest as wsCreateRequest,
+  deleteCollection as wsDeleteCollection,
+  deleteFolder as wsDeleteFolder,
+  deleteRequest as wsDeleteRequest,
+  duplicateRequest as wsDuplicateRequest,
+  getRequestsAtLocation,
+  moveCollectionDown as wsMoveCollectionDown,
+  moveCollectionUp as wsMoveCollectionUp,
+  moveItemDown as wsMoveItemDown,
+  moveItemUp as wsMoveItemUp,
+  moveRequest as wsMoveRequest,
+  renameCollection as wsRenameCollection,
+  renameFolder as wsRenameFolder,
+  renameRequest as wsRenameRequest,
+  updateRequestConfig as wsUpdateRequestConfig,
+  type RequestLocation,
+  type Workspace,
+} from "@api-lab/workspace-engine";
+import type { EnvironmentOption, RequestTabState } from "../types";
 import { createId } from "../lib/id";
-import { createEmptyTab, createInitialTab, seedCollections } from "../lib/seedData";
+import { createEmptyTab, createInitialTab } from "../lib/seedData";
+import { createSeedWorkspace } from "../lib/seedWorkspace";
+import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
+import {
+  loadTabsFromStorage,
+  loadWorkspaceFromStorage,
+  resetWorkspaceStorage,
+  saveTabsToStorage,
+  saveWorkspaceToStorage,
+} from "../lib/persistence";
 
 const executor = new BrowserFetchExecutor();
 
@@ -19,6 +49,39 @@ function getPreferredTheme(): ThemeMode {
   const stored = window.localStorage.getItem("api-lab-theme");
   if (stored === "light" || stored === "dark") return stored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+interface InitialState {
+  workspace: Workspace;
+  workspaceLoadError: string | null;
+  tabs: RequestTabState[];
+  activeTabId: string;
+  environment: EnvironmentOption;
+}
+
+function loadInitialState(): InitialState {
+  const workspaceResult = loadWorkspaceFromStorage();
+  const workspace =
+    workspaceResult.status === "ok"
+      ? workspaceResult.workspace
+      : workspaceResult.status === "empty"
+        ? createSeedWorkspace()
+        : { collections: [] };
+  const workspaceLoadError = workspaceResult.status === "error" ? workspaceResult.detail : null;
+
+  const persistedTabs = loadTabsFromStorage();
+  if (persistedTabs) {
+    return {
+      workspace,
+      workspaceLoadError,
+      tabs: persistedTabs.tabs,
+      activeTabId: persistedTabs.activeTabId,
+      environment: persistedTabs.environment,
+    };
+  }
+
+  const tab = createInitialTab();
+  return { workspace, workspaceLoadError, tabs: [tab], activeTabId: tab.id, environment: "none" };
 }
 
 interface AppState {
@@ -34,8 +97,27 @@ interface AppState {
   environment: EnvironmentOption;
   setEnvironment: (env: EnvironmentOption) => void;
 
-  // Collections (static for Milestone 1 — Milestone 3 connects this to real persistence)
-  collections: Collection[];
+  // Workspace: collections / folders / saved requests
+  workspace: Workspace;
+  workspaceLoadError: string | null;
+  resetWorkspace: () => void;
+
+  createCollection: (name: string) => string;
+  renameCollection: (collectionId: string, name: string) => void;
+  deleteCollection: (collectionId: string) => void;
+  moveCollectionUp: (collectionId: string) => void;
+  moveCollectionDown: (collectionId: string) => void;
+
+  createFolder: (collectionId: string, name: string) => string;
+  renameFolder: (collectionId: string, folderId: string, name: string) => void;
+  deleteFolder: (collectionId: string, folderId: string) => void;
+
+  renameSavedRequest: (location: RequestLocation, requestId: string, name: string) => void;
+  deleteSavedRequest: (location: RequestLocation, requestId: string) => void;
+  duplicateSavedRequest: (location: RequestLocation, requestId: string) => void;
+  moveSavedRequest: (from: RequestLocation, to: RequestLocation, requestId: string) => void;
+  moveItemUp: (location: RequestLocation, itemId: string) => void;
+  moveItemDown: (location: RequestLocation, itemId: string) => void;
 
   // Tabs
   tabs: RequestTabState[];
@@ -43,6 +125,9 @@ interface AppState {
   openNewTab: () => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
+  openSavedRequest: (location: RequestLocation, requestId: string) => void;
+  saveNewRequest: (tabId: string, location: RequestLocation, name: string) => void;
+  saveTab: (tabId: string) => void;
 
   // Active tab field updates
   setTabMethod: (tabId: string, method: HttpMethod) => void;
@@ -90,7 +175,11 @@ function updateTab(
   );
 }
 
-const initialTab = createInitialTab();
+function sameLocation(a: RequestLocation, b: RequestLocation): boolean {
+  return a.collectionId === b.collectionId && a.folderId === b.folderId;
+}
+
+const initial = loadInitialState();
 
 export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
@@ -106,13 +195,89 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { theme: next };
     }),
 
-  environment: "none",
+  environment: initial.environment,
   setEnvironment: (environment) => set({ environment }),
 
-  collections: seedCollections,
+  workspace: initial.workspace,
+  workspaceLoadError: initial.workspaceLoadError,
+  resetWorkspace: () => {
+    resetWorkspaceStorage();
+    const workspace = createSeedWorkspace();
+    set({ workspace, workspaceLoadError: null });
+  },
 
-  tabs: [initialTab],
-  activeTabId: initialTab.id,
+  createCollection: (name) => {
+    const { workspace, collectionId } = wsCreateCollection(get().workspace, name);
+    set({ workspace });
+    return collectionId;
+  },
+  renameCollection: (collectionId, name) =>
+    set((s) => ({ workspace: wsRenameCollection(s.workspace, collectionId, name) })),
+  deleteCollection: (collectionId) =>
+    set((s) => ({
+      workspace: wsDeleteCollection(s.workspace, collectionId),
+      tabs: s.tabs.map((tab) =>
+        tab.savedLocation?.collectionId === collectionId
+          ? { ...tab, savedRequestId: undefined, savedLocation: undefined, savedSnapshot: undefined }
+          : tab,
+      ),
+    })),
+  moveCollectionUp: (collectionId) =>
+    set((s) => ({ workspace: wsMoveCollectionUp(s.workspace, collectionId) })),
+  moveCollectionDown: (collectionId) =>
+    set((s) => ({ workspace: wsMoveCollectionDown(s.workspace, collectionId) })),
+
+  createFolder: (collectionId, name) => {
+    const { workspace, folderId } = wsCreateFolder(get().workspace, collectionId, name);
+    set({ workspace });
+    return folderId;
+  },
+  renameFolder: (collectionId, folderId, name) =>
+    set((s) => ({ workspace: wsRenameFolder(s.workspace, collectionId, folderId, name) })),
+  deleteFolder: (collectionId, folderId) =>
+    set((s) => ({
+      workspace: wsDeleteFolder(s.workspace, collectionId, folderId),
+      tabs: s.tabs.map((tab) =>
+        tab.savedLocation?.collectionId === collectionId && tab.savedLocation.folderId === folderId
+          ? { ...tab, savedRequestId: undefined, savedLocation: undefined, savedSnapshot: undefined }
+          : tab,
+      ),
+    })),
+
+  renameSavedRequest: (location, requestId, name) =>
+    set((s) => ({
+      workspace: wsRenameRequest(s.workspace, location, requestId, name),
+      tabs: updateTab(s.tabs, s.tabs.find((t) => t.savedRequestId === requestId)?.id ?? "", { name }),
+    })),
+  deleteSavedRequest: (location, requestId) =>
+    set((s) => ({
+      workspace: wsDeleteRequest(s.workspace, location, requestId),
+      tabs: s.tabs.map((tab) =>
+        tab.savedRequestId === requestId
+          ? { ...tab, savedRequestId: undefined, savedLocation: undefined, savedSnapshot: undefined }
+          : tab,
+      ),
+    })),
+  duplicateSavedRequest: (location, requestId) => {
+    const { workspace, requestId: copyId } = wsDuplicateRequest(get().workspace, location, requestId);
+    set({ workspace });
+    get().openSavedRequest(location, copyId);
+  },
+  moveSavedRequest: (from, to, requestId) =>
+    set((s) => ({
+      workspace: wsMoveRequest(s.workspace, from, to, requestId),
+      tabs: s.tabs.map((tab) =>
+        tab.savedRequestId === requestId && tab.savedLocation && sameLocation(tab.savedLocation, from)
+          ? { ...tab, savedLocation: to }
+          : tab,
+      ),
+    })),
+  moveItemUp: (location, itemId) => set((s) => ({ workspace: wsMoveItemUp(s.workspace, location, itemId) })),
+  moveItemDown: (location, itemId) =>
+    set((s) => ({ workspace: wsMoveItemDown(s.workspace, location, itemId) })),
+
+  tabs: initial.tabs,
+  activeTabId: initial.activeTabId,
 
   openNewTab: () =>
     set((s) => {
@@ -133,6 +298,59 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+  openSavedRequest: (location, requestId) => {
+    const state = get();
+    // Opening an already-open saved request activates its existing tab
+    // instead of creating a duplicate editing session.
+    const existing = state.tabs.find(
+      (t) => t.savedRequestId === requestId && t.savedLocation && sameLocation(t.savedLocation, location),
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return;
+    }
+
+    const requests = getRequestsAtLocation(state.workspace, location.collectionId, location.folderId);
+    const saved = requests.find((r) => r.id === requestId);
+    if (!saved) return;
+
+    const tab = createEmptyTab({
+      name: saved.name,
+      ...requestConfigToTabFields(saved.request),
+      savedRequestId: saved.id,
+      savedLocation: location,
+      savedSnapshot: saved.request,
+    });
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
+  },
+
+  saveNewRequest: (tabId, location, name) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    const requestConfig = tabToRequestConfig(tab);
+    const { workspace, requestId } = wsCreateRequest(get().workspace, location, name, requestConfig);
+    set((s) => ({
+      workspace,
+      tabs: updateTab(s.tabs, tabId, {
+        name,
+        savedRequestId: requestId,
+        savedLocation: location,
+        savedSnapshot: requestConfig,
+      }),
+    }));
+  },
+
+  saveTab: (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab || !tab.savedRequestId || !tab.savedLocation) return;
+    const requestConfig = tabToRequestConfig(tab);
+    const workspace = wsUpdateRequestConfig(get().workspace, tab.savedLocation, tab.savedRequestId, requestConfig);
+    set((s) => ({
+      workspace,
+      tabs: updateTab(s.tabs, tabId, { savedSnapshot: requestConfig }),
+    }));
+  },
 
   setTabMethod: (tabId, method) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { method }) })),
   setTabUrl: (tabId, url) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { url }) })),
@@ -263,3 +481,25 @@ export function useActiveTab(): RequestTabState {
   const activeTabId = useAppStore((s) => s.activeTabId);
   return tabs.find((t) => t.id === activeTabId) ?? tabs[0]!;
 }
+
+// Persist the workspace (debounced) whenever it changes, and skip writes
+// while a load error is being shown — see loadWorkspaceFromStorage's
+// "don't clobber possibly-recoverable data" reasoning in lib/persistence.ts.
+let lastWorkspace = useAppStore.getState().workspace;
+useAppStore.subscribe((state) => {
+  if (state.workspace !== lastWorkspace) {
+    lastWorkspace = state.workspace;
+    if (!state.workspaceLoadError) {
+      saveWorkspaceToStorage(state.workspace);
+    }
+  }
+});
+
+let lastTabsSignature = "";
+useAppStore.subscribe((state) => {
+  const signature = JSON.stringify([state.tabs, state.activeTabId, state.environment]);
+  if (signature !== lastTabsSignature) {
+    lastTabsSignature = signature;
+    saveTabsToStorage({ tabs: state.tabs, activeTabId: state.activeTabId, environment: state.environment });
+  }
+});

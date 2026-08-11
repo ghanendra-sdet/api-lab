@@ -30,11 +30,13 @@ Milestones are sequential checkpoints. Per `CLAUDE.md`'s Development Workflow, e
 
 **Status**: Complete (raw-body JSON/Text/XML/HTML; form-data and x-www-form-urlencoded remain UI-only, deferred). Shipped: `packages/request-engine` (URL/header/body builders, pre-send validation, a `RequestExecutor` transport abstraction with `BrowserFetchExecutor` as its only implementation, response normalization); real HTTP execution wired into the store per tab with loading/cancel state via `AbortController`; a response viewer with real status/time/size, Pretty (Monaco, read-only)/Raw views, a Headers tab, and correct empty/non-JSON/HTML handling (HTML always shown as inert text); 43 request-engine unit tests, 8 new apps/web unit tests, and a 14-scenario Playwright suite running against a small dependency-free local HTTP fixture (`apps/web/e2e/fixtures/server.mjs` — not the Mock Engine). CORS and response-size precision are documented, real limitations, not bugs — see `docs/ARCHITECTURE.md`.
 
-## Milestone 3 — Collections
+## Milestone 3 — Collections ✅
 
 - Collections and folders
 - Request CRUD (create, rename, duplicate, delete, reorder)
 - Local persistence
+
+**Status**: Complete. Shipped: `packages/workspace-engine` (pure, immutable CRUD over a `Workspace → Collections → (Folders → Requests) | Requests` domain model, one level of folder nesting, stable non-regenerating IDs, Zod-validated versioned serialization); a store split between workspace state and request-execution state in `apps/web/src/store/useAppStore.ts`; the Saved-Request/Open-Tab distinction (opening an already-open saved request activates its existing tab rather than duplicating it); a functional collections sidebar (create/rename/delete/reorder for collections and folders, create/rename/duplicate/move/delete/reorder for requests, empty states) driven by native `prompt`/`confirm`; a small Save dialog for first-time saves and one-click re-save for linked tabs; a dirty (`*`) indicator with a close-tab confirmation guard; two-tier debounced localStorage persistence (strict versioned schema for the workspace, best-effort for the tab/session UI state) with corrupt/invalid/unknown-version recovery via a "Reset Local Workspace" banner that never crashes startup or silently discards data; 31 workspace-engine unit tests, 20 new apps/web unit tests, and an 11-scenario Playwright suite including a real (non-mocked) browser-reload persistence test — plus the full 14-scenario Milestone 2 regression suite, unmodified in intent, still passing. Postman/OpenAPI import-export remains out of scope (Milestone 6); `workspace-engine` is deliberately a separate package from the future `collection-format` adapter layer — see `docs/ARCHITECTURE.md`.
 
 ## Milestone 4 — Environments
 

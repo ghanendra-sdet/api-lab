@@ -1,22 +1,5 @@
-import type { Collection, RequestTabState } from "../types";
+import type { RequestTabState } from "../types";
 import { createId } from "./id";
-
-export const seedCollections: Collection[] = [
-  {
-    id: "col_example",
-    name: "Example Collection",
-    requests: [
-      { id: "req_users_get", name: "Users", method: "GET" },
-      { id: "req_users_post", name: "User", method: "POST" },
-      { id: "req_users_put", name: "User", method: "PUT" },
-    ],
-  },
-  {
-    id: "col_auth",
-    name: "Authentication",
-    requests: [{ id: "req_login", name: "Login", method: "POST" }],
-  },
-];
 
 export function createEmptyTab(overrides: Partial<RequestTabState> = {}): RequestTabState {
   return {

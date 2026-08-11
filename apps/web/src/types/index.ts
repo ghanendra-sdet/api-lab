@@ -6,22 +6,9 @@ import type {
   KeyValueRow,
   RequestPanelId,
 } from "@api-lab/shared";
+import type { RequestConfig, RequestLocation } from "@api-lab/workspace-engine";
 
-/** A saved request inside the collections sidebar (static/local for Milestone 1). */
-export interface SavedRequest {
-  id: string;
-  name: string;
-  method: HttpMethod;
-}
-
-/** A collection node in the sidebar tree. */
-export interface Collection {
-  id: string;
-  name: string;
-  requests: SavedRequest[];
-}
-
-/** The full editable state of one open request tab. Not persisted yet — Milestone 3. */
+/** The full editable state of one open request tab. */
 export interface RequestTabState {
   id: string;
   name: string;
@@ -37,6 +24,17 @@ export interface RequestTabState {
   preRequestScript: string;
   postResponseScript: string;
   testsScript: string;
+
+  /**
+   * Set only when this tab is linked to a saved request — undefined means
+   * "unsaved" (a brand-new tab that hasn't been saved into any collection
+   * yet). Saving a never-saved tab goes through the Save dialog; saving an
+   * already-linked tab updates the saved request in place.
+   */
+  savedRequestId?: string;
+  savedLocation?: RequestLocation;
+  /** The request config as of the last open/save — used to compute dirty state. */
+  savedSnapshot?: RequestConfig;
 }
 
 export type EnvironmentOption = "none" | "development" | "testing" | "production";

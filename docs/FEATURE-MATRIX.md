@@ -58,14 +58,14 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Collections (create/list) | P0 | 3 | Planned |
-| Folders (nested) | P0 | 3 | Planned |
-| Requests within folders/collections | P0 | 3 | Planned |
-| Reordering | P1 | 3 | Planned |
-| Duplicate | P1 | 3 | Planned |
-| Rename | P0 | 3 | Planned |
-| Delete | P0 | 3 | Planned |
-| Local persistence | P0 | 3 | Planned |
+| Collections (create/list) | P0 | 3 | Done |
+| Folders (nested) | P0 | 3 | Done (one level deep, by design — see docs/ARCHITECTURE.md) |
+| Requests within folders/collections | P0 | 3 | Done |
+| Reordering | P1 | 3 | Done (move up/down, not drag-and-drop) |
+| Duplicate | P1 | 3 | Done |
+| Rename | P0 | 3 | Done |
+| Delete | P0 | 3 | Done |
+| Local persistence | P0 | 3 | Done (localStorage, versioned schema, corrupt-data recovery) |
 
 ## Environments
 

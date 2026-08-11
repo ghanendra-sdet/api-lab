@@ -1,5 +1,6 @@
 import { useAppStore } from "../../store/useAppStore";
 import { methodTextClass } from "../../lib/methodStyles";
+import { isTabDirty } from "../../lib/requestConfig";
 
 export function RequestTabs() {
   const tabs = useAppStore((s) => s.tabs);
@@ -7,6 +8,16 @@ export function RequestTabs() {
   const setActiveTab = useAppStore((s) => s.setActiveTab);
   const closeTab = useAppStore((s) => s.closeTab);
   const openNewTab = useAppStore((s) => s.openNewTab);
+
+  function handleClose(tabId: string, tab: (typeof tabs)[number]) {
+    if (isTabDirty(tab)) {
+      const proceed = window.confirm(
+        `"${tab.name}" has unsaved changes. Close this tab and discard them?`,
+      );
+      if (!proceed) return;
+    }
+    closeTab(tabId);
+  }
 
   return (
     <div
@@ -16,6 +27,7 @@ export function RequestTabs() {
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
+        const dirty = isTabDirty(tab);
         return (
           <div
             key={tab.id}
@@ -36,10 +48,11 @@ export function RequestTabs() {
                 {tab.method}
               </span>
               <span className="max-w-[10rem] truncate">{tab.name}</span>
+              {dirty && <span className="text-neutral-400 dark:text-neutral-500">*</span>}
             </button>
             <button
               type="button"
-              onClick={() => closeTab(tab.id)}
+              onClick={() => handleClose(tab.id, tab)}
               aria-label={`Close ${tab.name} tab`}
               className="rounded px-1 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 group-hover:opacity-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >

@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
+import { isTabDirty } from "../../lib/requestConfig";
 import { MethodSelector } from "./MethodSelector";
+import { SaveRequestDialog } from "../collections/SaveRequestDialog";
 
 interface RequestBarProps {
   tab: RequestTabState;
@@ -12,9 +15,21 @@ export function RequestBar({ tab }: RequestBarProps) {
   const sendRequest = useAppStore((s) => s.sendRequest);
   const cancelRequest = useAppStore((s) => s.cancelRequest);
   const resetRequest = useAppStore((s) => s.resetRequest);
+  const saveTab = useAppStore((s) => s.saveTab);
   const status = useAppStore((s) => s.requestStatus[tab.id] ?? "idle");
   const sendError = useAppStore((s) => s.sendErrors[tab.id]);
   const isLoading = status === "loading";
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const isLinked = Boolean(tab.savedRequestId && tab.savedLocation);
+  const dirty = isTabDirty(tab);
+
+  function handleSaveClick() {
+    if (isLinked) {
+      saveTab(tab.id);
+    } else {
+      setShowSaveDialog(true);
+    }
+  }
 
   return (
     <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
@@ -58,7 +73,20 @@ export function RequestBar({ tab }: RequestBarProps) {
         >
           Clear
         </button>
+        <button
+          type="button"
+          onClick={handleSaveClick}
+          aria-label="Save request"
+          className={`ml-2 h-9 shrink-0 rounded-md border px-3 text-sm font-medium ${
+            isLinked && dirty
+              ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+              : "border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-900"
+          }`}
+        >
+          {isLinked ? (dirty ? "Save*" : "Save") : "Save"}
+        </button>
       </div>
+      {showSaveDialog && <SaveRequestDialog tabId={tab.id} onClose={() => setShowSaveDialog(false)} />}
       {isLoading && (
         <p role="status" className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
           Sending...
