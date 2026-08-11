@@ -29,15 +29,33 @@ import {
   type RequestLocation,
   type Workspace,
 } from "@api-lab/workspace-engine";
-import type { EnvironmentOption, RequestTabState } from "../types";
+import {
+  addVariable as envAddVariable,
+  buildVariableContext,
+  createEmptyEnvironmentWorkspace,
+  createEnvironment as envCreateEnvironment,
+  deleteEnvironment as envDeleteEnvironment,
+  duplicateEnvironment as envDuplicateEnvironment,
+  removeVariable as envRemoveVariable,
+  renameEnvironment as envRenameEnvironment,
+  resolveRequestConfig,
+  setActiveEnvironment as envSetActiveEnvironment,
+  updateVariable as envUpdateVariable,
+  type EnvironmentWorkspace,
+  type Variable,
+} from "@api-lab/environment-engine";
+import type { RequestTabState } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
 import {
+  loadEnvironmentsFromStorage,
   loadTabsFromStorage,
   loadWorkspaceFromStorage,
+  resetEnvironmentsStorage,
   resetWorkspaceStorage,
+  saveEnvironmentsToStorage,
   saveTabsToStorage,
   saveWorkspaceToStorage,
 } from "../lib/persistence";
@@ -54,9 +72,10 @@ function getPreferredTheme(): ThemeMode {
 interface InitialState {
   workspace: Workspace;
   workspaceLoadError: string | null;
+  environments: EnvironmentWorkspace;
+  environmentsLoadError: string | null;
   tabs: RequestTabState[];
   activeTabId: string;
-  environment: EnvironmentOption;
 }
 
 function loadInitialState(): InitialState {
@@ -69,19 +88,32 @@ function loadInitialState(): InitialState {
         : { collections: [] };
   const workspaceLoadError = workspaceResult.status === "error" ? workspaceResult.detail : null;
 
+  const environmentsResult = loadEnvironmentsFromStorage();
+  const environments =
+    environmentsResult.status === "ok" ? environmentsResult.data : createEmptyEnvironmentWorkspace();
+  const environmentsLoadError = environmentsResult.status === "error" ? environmentsResult.detail : null;
+
   const persistedTabs = loadTabsFromStorage();
   if (persistedTabs) {
     return {
       workspace,
       workspaceLoadError,
+      environments,
+      environmentsLoadError,
       tabs: persistedTabs.tabs,
       activeTabId: persistedTabs.activeTabId,
-      environment: persistedTabs.environment,
     };
   }
 
   const tab = createInitialTab();
-  return { workspace, workspaceLoadError, tabs: [tab], activeTabId: tab.id, environment: "none" };
+  return {
+    workspace,
+    workspaceLoadError,
+    environments,
+    environmentsLoadError,
+    tabs: [tab],
+    activeTabId: tab.id,
+  };
 }
 
 interface AppState {
@@ -93,9 +125,22 @@ interface AppState {
   theme: ThemeMode;
   toggleTheme: () => void;
 
-  // Environment (placeholder — no resolution logic until Milestone 4)
-  environment: EnvironmentOption;
-  setEnvironment: (env: EnvironmentOption) => void;
+  // Environments / variables
+  environments: EnvironmentWorkspace;
+  environmentsLoadError: string | null;
+  resetEnvironments: () => void;
+  createEnvironment: (name: string) => string;
+  renameEnvironment: (environmentId: string, name: string) => void;
+  deleteEnvironment: (environmentId: string) => void;
+  duplicateEnvironment: (environmentId: string) => string;
+  setActiveEnvironment: (environmentId: string | null) => void;
+  addVariable: (environmentId: string) => string;
+  updateVariable: (
+    environmentId: string,
+    variableId: string,
+    patch: Partial<Pick<Variable, "key" | "value" | "enabled" | "secret">>,
+  ) => void;
+  removeVariable: (environmentId: string, variableId: string) => void;
 
   // Workspace: collections / folders / saved requests
   workspace: Workspace;
@@ -195,8 +240,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { theme: next };
     }),
 
-  environment: initial.environment,
-  setEnvironment: (environment) => set({ environment }),
+  environments: initial.environments,
+  environmentsLoadError: initial.environmentsLoadError,
+  resetEnvironments: () => {
+    resetEnvironmentsStorage();
+    set({ environments: createEmptyEnvironmentWorkspace(), environmentsLoadError: null });
+  },
+  createEnvironment: (name) => {
+    const { workspace, environmentId } = envCreateEnvironment(get().environments, name);
+    set({ environments: workspace });
+    return environmentId;
+  },
+  renameEnvironment: (environmentId, name) =>
+    set((s) => ({ environments: envRenameEnvironment(s.environments, environmentId, name) })),
+  deleteEnvironment: (environmentId) =>
+    set((s) => ({ environments: envDeleteEnvironment(s.environments, environmentId) })),
+  duplicateEnvironment: (environmentId) => {
+    const { workspace, environmentId: newId } = envDuplicateEnvironment(get().environments, environmentId);
+    set({ environments: workspace });
+    return newId;
+  },
+  setActiveEnvironment: (environmentId) =>
+    set((s) => ({ environments: envSetActiveEnvironment(s.environments, environmentId) })),
+  addVariable: (environmentId) => {
+    const { workspace, variableId } = envAddVariable(get().environments, environmentId);
+    set({ environments: workspace });
+    return variableId;
+  },
+  updateVariable: (environmentId, variableId, patch) =>
+    set((s) => ({ environments: envUpdateVariable(s.environments, environmentId, variableId, patch) })),
+  removeVariable: (environmentId, variableId) =>
+    set((s) => ({ environments: envRemoveVariable(s.environments, environmentId, variableId) })),
 
   workspace: initial.workspace,
   workspaceLoadError: initial.workspaceLoadError,
@@ -410,15 +484,53 @@ export const useAppStore = create<AppState>((set, get) => ({
   abortControllers: {},
 
   sendRequest: async (tabId) => {
-    const tab = get().tabs.find((t) => t.id === tabId);
+    const state = get();
+    const tab = state.tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
-    const urlError = validateUrl(tab.url);
+    const activeEnvironment = state.environments.environments.find(
+      (e) => e.id === state.environments.activeEnvironmentId,
+    );
+    const context = buildVariableContext(activeEnvironment);
+    const resolution = resolveRequestConfig(
+      { url: tab.url, params: tab.params, headers: tab.headers, bodyRawContent: tab.bodyRawContent },
+      context,
+    );
+
+    if (resolution.hasCircularReference) {
+      set((s) => ({
+        sendErrors: {
+          ...s.sendErrors,
+          [tabId]: {
+            field: "variables",
+            message: "Circular variable reference detected. Fix the environment's variable values before sending.",
+          },
+        },
+      }));
+      return;
+    }
+
+    if (resolution.unresolvedVariables.length > 0) {
+      set((s) => ({
+        sendErrors: {
+          ...s.sendErrors,
+          [tabId]: {
+            field: "variables",
+            message: `Unresolved variable${resolution.unresolvedVariables.length > 1 ? "s" : ""}: ${resolution.unresolvedVariables.join(", ")}. Select an environment that defines ${resolution.unresolvedVariables.length > 1 ? "them" : "it"}, or remove the reference.`,
+          },
+        },
+      }));
+      return;
+    }
+
+    const resolved = resolution.resolved;
+
+    const urlError = validateUrl(resolved.url);
     if (urlError) {
       set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: urlError } }));
       return;
     }
-    const bodyError = validateJsonBody(tab.bodyMode, tab.bodyRawFormat, tab.bodyRawContent);
+    const bodyError = validateJsonBody(tab.bodyMode, tab.bodyRawFormat, resolved.bodyRawContent);
     if (bodyError) {
       set((s) => ({ sendErrors: { ...s.sendErrors, [tabId]: bodyError } }));
       return;
@@ -436,13 +548,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: tab.id,
       name: tab.name,
       method: tab.method,
-      url: tab.url,
-      queryParams: tab.params,
-      headers: tab.headers,
+      url: resolved.url,
+      queryParams: resolved.params,
+      headers: resolved.headers,
       authType: tab.authType,
       bodyMode: tab.bodyMode,
       bodyRawFormat: tab.bodyRawFormat,
-      bodyRawContent: tab.bodyRawContent,
+      bodyRawContent: resolved.bodyRawContent,
     });
 
     const result = await executor.execute(built, { signal: controller.signal });
@@ -482,6 +594,12 @@ export function useActiveTab(): RequestTabState {
   return tabs.find((t) => t.id === activeTabId) ?? tabs[0]!;
 }
 
+/** The currently active environment, or undefined for "No Environment". */
+export function useActiveEnvironment() {
+  const environments = useAppStore((s) => s.environments);
+  return environments.environments.find((e) => e.id === environments.activeEnvironmentId);
+}
+
 // Persist the workspace (debounced) whenever it changes, and skip writes
 // while a load error is being shown — see loadWorkspaceFromStorage's
 // "don't clobber possibly-recoverable data" reasoning in lib/persistence.ts.
@@ -495,11 +613,21 @@ useAppStore.subscribe((state) => {
   }
 });
 
+let lastEnvironments = useAppStore.getState().environments;
+useAppStore.subscribe((state) => {
+  if (state.environments !== lastEnvironments) {
+    lastEnvironments = state.environments;
+    if (!state.environmentsLoadError) {
+      saveEnvironmentsToStorage(state.environments);
+    }
+  }
+});
+
 let lastTabsSignature = "";
 useAppStore.subscribe((state) => {
-  const signature = JSON.stringify([state.tabs, state.activeTabId, state.environment]);
+  const signature = JSON.stringify([state.tabs, state.activeTabId]);
   if (signature !== lastTabsSignature) {
     lastTabsSignature = signature;
-    saveTabsToStorage({ tabs: state.tabs, activeTabId: state.activeTabId, environment: state.environment });
+    saveTabsToStorage({ tabs: state.tabs, activeTabId: state.activeTabId });
   }
 });

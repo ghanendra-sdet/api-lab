@@ -45,6 +45,19 @@ Two components make outbound requests on the user's behalf: `apps/mock-server` a
 
 - Any code that merges external/untrusted objects (collection import, environment variable resolution, script return values) uses safe merge utilities that reject or strip dangerous keys (`__proto__`, `constructor`, `prototype`), or uses `Object.create(null)` / `Map` for untrusted key-value data instead of plain object literals where practical.
 - Zod schemas validate imported data's shape before it's merged into application state at all — malformed or unexpected keys are rejected at the boundary, not silently absorbed.
+- **Implemented (Milestone 4)**: `environment-engine`'s variable-resolution context is the first concrete case of untrusted, user-defined keys (a variable's `key` field) reaching a plain-object lookup. `buildVariableContext`/`buildDisplayVariableContext` build that context with `Object.create(null)`, and the resolver checks membership with `Object.hasOwn` rather than `in` — see `docs/ARCHITECTURE.md`'s Milestone 4 section and `resolver.test.ts`'s `__proto__`/`constructor` regression tests.
+
+## Environment Variables & Secrets (Milestone 4)
+
+Environment variables — including those flagged `secret` — are resolved and stored the same way as any other API Lab data, with the limitations that implies:
+
+- **`secret` is a UI/behavior flag, not encryption.** A secret variable's value is stored in `localStorage["api-lab-environments"]` in plaintext, exactly like a non-secret variable. `secret: true` controls masking in the app's own UI (password-style input, per-row show/hide, always-masked in the resolved-URL preview) — it does **not** protect the value from another script or browser extension with access to this origin's storage, from someone with access to the browser profile/disk, or from browser devtools. This must never be described as "encrypted" or "secure storage" anywhere in the app or its documentation.
+- **Never logged.** No code path passes a resolved variable value (secret or not) to `console.log`/`console.error`/`console.warn`. Validation and send errors reference variable *names* only (e.g. `"Unresolved variable: token"`), never values.
+- **Masked in previews.** `buildDisplayVariableContext` substitutes a fixed mask for every secret variable's value *before* that value ever reaches the resolver used for the UI's resolved-URL preview — the real value is never held anywhere in that code path, not even transiently, let alone rendered.
+- **Not sent to the resolved-URL preview's underlying string except as a mask.** The only place a secret's real value is ever read is at actual send time, immediately before `buildRequest` — the same point any other variable is resolved.
+- **Treated as opaque string data, never executed.** The resolver (`resolveVariables`) does pure string substitution — no `eval`, no `new Function`, no template-literal evaluation of variable content. A variable value containing `<script>` or `${...}` is inserted as literal text, never interpreted.
+- **Prototype-pollution resistant.** Because a variable's `key` is arbitrary user text, the resolver's context objects are built with `Object.create(null)` and checked with `Object.hasOwn` rather than `{}` and the `in` operator — so a variable named `__proto__` or `constructor` can neither crash the resolver nor reach `Object.prototype`. See `docs/ARCHITECTURE.md`'s Milestone 4 section for the specific mechanism and its regression tests.
+- **Corrupt-storage recovery never silently discards secrets.** Like the workspace envelope, a corrupt/invalid `api-lab-environments` value is left untouched in storage until the user explicitly confirms "Reset Local Environments" — never overwritten automatically.
 
 ## Credential Handling
 

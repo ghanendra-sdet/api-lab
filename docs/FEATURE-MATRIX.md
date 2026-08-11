@@ -71,12 +71,17 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Global variables | P0 | 4 | Planned |
-| Environment variables | P0 | 4 | Planned |
-| Collection variables | P1 | 4 | Planned |
-| Local/request variables | P1 | 4 | Planned |
-| Variable interpolation (`{{var}}`) | P0 | 4 | Planned |
-| Environment switching (in-context) | P0 | 4 | Planned |
+| Global variables | P0 | 4 | Deferred (documented precedence, not implemented — see docs/ARCHITECTURE.md) |
+| Environment variables | P0 | 4 | Done |
+| Collection variables | P1 | 4 | Deferred (documented precedence, not implemented — see docs/ARCHITECTURE.md) |
+| Local/request variables | P1 | 4 | Deferred (documented precedence, not implemented — see docs/ARCHITECTURE.md) |
+| Variable interpolation (`{{var}}`) | P0 | 4 | Done (URL, query params, headers, raw body; circular-reference and resolution-depth protected) |
+| Environment switching (in-context) | P0 | 4 | Done |
+| Environment CRUD (create/rename/duplicate/delete) | P0 | 4 | Done |
+| Variable CRUD + enable/disable + secret flag | P0 | 4 | Done |
+| Secret masking (UI) | P0 | 4 | Done (per-row show/hide; never revealed in the resolved-URL preview) |
+| Unknown-variable handling | P0 | 4 | Done (blocks send with a named error, never silently sends a broken URL) |
+| Environment persistence + corrupt-data recovery | P0 | 4 | Done (dedicated versioned localStorage boundary, separate from the workspace envelope) |
 
 ## Authentication
 

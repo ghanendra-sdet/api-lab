@@ -11,7 +11,6 @@ function resetStore() {
     workspace: createEmptyWorkspace(),
     workspaceLoadError: null,
     theme: "light",
-    environment: "none",
     sidebarCollapsed: false,
   });
 }

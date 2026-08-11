@@ -1,9 +1,15 @@
 import { deserializeWorkspace, serializeWorkspace, type Workspace } from "@api-lab/workspace-engine";
-import type { EnvironmentOption, RequestTabState } from "../types";
+import {
+  deserializeEnvironments,
+  serializeEnvironments,
+  type EnvironmentWorkspace,
+} from "@api-lab/environment-engine";
+import type { RequestTabState } from "../types";
 import { debounce } from "./debounce";
 
 const WORKSPACE_KEY = "api-lab-workspace";
 const TABS_KEY = "api-lab-tabs";
+const ENVIRONMENTS_KEY = "api-lab-environments";
 const DEBOUNCE_MS = 400;
 
 // ---------------------------------------------------------------------------
@@ -61,7 +67,6 @@ export function resetWorkspaceStorage(): void {
 interface PersistedTabsBlob {
   tabs: RequestTabState[];
   activeTabId: string;
-  environment: EnvironmentOption;
 }
 
 function isPersistedTabsBlob(value: unknown): value is PersistedTabsBlob {
@@ -98,3 +103,60 @@ function writeTabsNow(blob: PersistedTabsBlob): void {
 }
 
 export const saveTabsToStorage = debounce(writeTabsNow, DEBOUNCE_MS);
+
+// ---------------------------------------------------------------------------
+// Environments/variables — a dedicated versioned boundary, separate from the
+// workspace envelope above. Environments are a sibling concept to
+// collections (not nested inside them), can contain secret values that
+// deserve their own documented storage story, and may evolve on a different
+// schema timeline (e.g. adding Global/Collection scopes later) — reusing the
+// workspace envelope would couple two unrelated migration paths together.
+// Strictly validated, like the workspace, since losing environment
+// definitions (and the active selection) is real, not just a UI polish
+// issue.
+//
+// Security note: like all localStorage data, values stored here — including
+// variables flagged `secret` — are stored in plaintext, accessible to any
+// script or extension running in the browser's local profile with access to
+// this origin's storage. The `secret` flag controls in-app UI masking only;
+// it is not encryption and must never be described as one. See
+// docs/SECURITY.md.
+// ---------------------------------------------------------------------------
+
+export type LoadEnvironmentsResult =
+  | { status: "empty" }
+  | { status: "ok"; data: EnvironmentWorkspace }
+  | { status: "error"; detail: string };
+
+export function loadEnvironmentsFromStorage(): LoadEnvironmentsResult {
+  if (typeof window === "undefined") return { status: "empty" };
+  const raw = window.localStorage.getItem(ENVIRONMENTS_KEY);
+  if (raw === null) return { status: "empty" };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: "error", detail: "Saved environment data is not valid JSON." };
+  }
+
+  const result = deserializeEnvironments(parsed);
+  if (!result.ok) return { status: "error", detail: result.detail };
+  return { status: "ok", data: result.data };
+}
+
+function writeEnvironmentsNow(data: EnvironmentWorkspace): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ENVIRONMENTS_KEY, JSON.stringify(serializeEnvironments(data)));
+  } catch {
+    // Storage full/unavailable — non-fatal, same reasoning as writeWorkspaceNow.
+  }
+}
+
+export const saveEnvironmentsToStorage = debounce(writeEnvironmentsNow, DEBOUNCE_MS);
+
+export function resetEnvironmentsStorage(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ENVIRONMENTS_KEY);
+}

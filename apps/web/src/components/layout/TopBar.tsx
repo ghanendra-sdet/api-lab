@@ -1,19 +1,18 @@
+import { useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
-import type { EnvironmentOption } from "../../types";
+import { EnvironmentManager } from "../environments/EnvironmentManager";
 
-const ENVIRONMENT_LABELS: Record<EnvironmentOption, string> = {
-  none: "No Environment",
-  development: "Development",
-  testing: "Testing",
-  production: "Production",
-};
+const MANAGE_ENVIRONMENTS_VALUE = "__manage__";
 
 export function TopBar() {
   const theme = useAppStore((s) => s.theme);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
-  const environment = useAppStore((s) => s.environment);
-  const setEnvironment = useAppStore((s) => s.setEnvironment);
+  const environments = useAppStore((s) => s.environments.environments);
+  const activeEnvironmentId = useAppStore((s) => s.environments.activeEnvironmentId);
+  const setActiveEnvironment = useAppStore((s) => s.setActiveEnvironment);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const environmentsLoadError = useAppStore((s) => s.environmentsLoadError);
+  const [managerOpen, setManagerOpen] = useState(false);
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 dark:border-neutral-800 dark:bg-neutral-950">
@@ -49,16 +48,36 @@ export function TopBar() {
         </label>
         <select
           id="environment-select"
-          value={environment}
-          onChange={(e) => setEnvironment(e.target.value as EnvironmentOption)}
+          value={activeEnvironmentId ?? ""}
+          onChange={(e) => {
+            const { value } = e.target;
+            if (value === MANAGE_ENVIRONMENTS_VALUE) {
+              setManagerOpen(true);
+              return;
+            }
+            setActiveEnvironment(value === "" ? null : value);
+          }}
           className="rounded border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-700 hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-700"
         >
-          {(Object.keys(ENVIRONMENT_LABELS) as EnvironmentOption[]).map((key) => (
-            <option key={key} value={key}>
-              {ENVIRONMENT_LABELS[key]}
+          <option value="">No Environment</option>
+          {environments.map((env) => (
+            <option key={env.id} value={env.id}>
+              {env.name}
             </option>
           ))}
+          <option value={MANAGE_ENVIRONMENTS_VALUE}>Manage Environments…</option>
         </select>
+
+        <button
+          type="button"
+          onClick={() => setManagerOpen(true)}
+          aria-label="Manage environments"
+          className={`rounded p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            environmentsLoadError ? "text-amber-600 dark:text-amber-400" : "text-neutral-500"
+          }`}
+        >
+          <GearIcon />
+        </button>
 
         <button
           type="button"
@@ -68,15 +87,8 @@ export function TopBar() {
         >
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
-
-        <button
-          type="button"
-          aria-label="Settings"
-          className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-        >
-          <GearIcon />
-        </button>
       </div>
+      {managerOpen && <EnvironmentManager onClose={() => setManagerOpen(false)} />}
     </header>
   );
 }

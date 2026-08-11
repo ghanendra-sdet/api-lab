@@ -4,7 +4,7 @@ A free, open-source, browser-based API client, testing, mocking, collection runn
 
 API Lab is being built as a zero-install alternative for everyday API development and QA work — build requests, organize them into collections, manage environments, write tests, run them against mock or real endpoints, and generate reports, all from the browser.
 
-> **Status**: Milestone 3 (Collections) complete. API Lab sends real HTTP requests — GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS, query params, headers, and raw JSON/Text/XML/HTML bodies — and shows the real response (status, timing, size, headers, Pretty/Raw body views). Requests can be organized into collections and folders, saved, edited, duplicated, moved, and reordered, and the whole workspace persists locally across reloads. Environments, auth execution, scripts, and the request runner are not built yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan.
+> **Status**: Milestone 4 (Environments & Variables) complete. API Lab sends real HTTP requests — GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS, query params, headers, and raw JSON/Text/XML/HTML bodies — and shows the real response (status, timing, size, headers, Pretty/Raw body views). Requests can be organized into collections and folders, saved, edited, duplicated, moved, and reordered, and the whole workspace persists locally across reloads. Requests can also reference `{{variables}}` resolved from a selectable Environment (URL, query, headers, body), with unresolved/circular references caught before send and secret values masked in the UI. Auth execution, scripts, and the request runner are not built yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone plan.
 
 ## Running Locally
 

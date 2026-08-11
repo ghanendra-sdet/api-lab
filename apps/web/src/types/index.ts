@@ -36,5 +36,3 @@ export interface RequestTabState {
   /** The request config as of the last open/save — used to compute dirty state. */
   savedSnapshot?: RequestConfig;
 }
-
-export type EnvironmentOption = "none" | "development" | "testing" | "production";

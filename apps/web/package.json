@@ -14,6 +14,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@api-lab/environment-engine": "*",
     "@api-lab/request-engine": "*",
     "@api-lab/shared": "*",
     "@api-lab/workspace-engine": "*",

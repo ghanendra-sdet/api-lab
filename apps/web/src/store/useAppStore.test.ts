@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { createEmptyEnvironmentWorkspace } from "@api-lab/environment-engine";
 import { useAppStore } from "./useAppStore";
 import { createEmptyTab } from "../lib/seedData";
 
@@ -8,7 +9,8 @@ function resetStore() {
     tabs: [freshTab],
     activeTabId: freshTab.id,
     theme: "light",
-    environment: "none",
+    environments: createEmptyEnvironmentWorkspace(),
+    environmentsLoadError: null,
     sidebarCollapsed: false,
   });
 }
@@ -91,8 +93,11 @@ describe("useAppStore", () => {
     expect(window.localStorage.getItem("api-lab-theme")).toBe(after);
   });
 
-  it("updates the selected environment", () => {
-    useAppStore.getState().setEnvironment("production");
-    expect(useAppStore.getState().environment).toBe("production");
+  it("creates an environment and sets it active", () => {
+    const id = useAppStore.getState().createEnvironment("Production");
+    useAppStore.getState().setActiveEnvironment(id);
+    const state = useAppStore.getState();
+    expect(state.environments.activeEnvironmentId).toBe(id);
+    expect(state.environments.environments[0]!.name).toBe("Production");
   });
 });

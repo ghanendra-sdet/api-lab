@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useAppStore } from "../../store/useAppStore";
+import { buildDisplayVariableContext, resolveVariables } from "@api-lab/environment-engine";
+import { useAppStore, useActiveEnvironment } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
 import { isTabDirty } from "../../lib/requestConfig";
 import { MethodSelector } from "./MethodSelector";
@@ -18,10 +19,16 @@ export function RequestBar({ tab }: RequestBarProps) {
   const saveTab = useAppStore((s) => s.saveTab);
   const status = useAppStore((s) => s.requestStatus[tab.id] ?? "idle");
   const sendError = useAppStore((s) => s.sendErrors[tab.id]);
+  const activeEnvironment = useActiveEnvironment();
   const isLoading = status === "loading";
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const isLinked = Boolean(tab.savedRequestId && tab.savedLocation);
   const dirty = isTabDirty(tab);
+
+  const hasVariableReference = /\{\{[A-Za-z_][A-Za-z0-9_]*\}\}/.test(tab.url);
+  const preview = hasVariableReference
+    ? resolveVariables(tab.url, buildDisplayVariableContext(activeEnvironment))
+    : null;
 
   function handleSaveClick() {
     if (isLinked) {
@@ -87,6 +94,17 @@ export function RequestBar({ tab }: RequestBarProps) {
         </button>
       </div>
       {showSaveDialog && <SaveRequestDialog tabId={tab.id} onClose={() => setShowSaveDialog(false)} />}
+      {preview && (
+        <p className="mt-2 truncate font-mono text-xs text-neutral-500 dark:text-neutral-400">
+          <span className="text-neutral-400 dark:text-neutral-600">Resolved: </span>
+          {preview.value}
+          {preview.unresolvedVariables.length > 0 && (
+            <span className="ml-1 text-amber-600 dark:text-amber-400">
+              (undefined: {preview.unresolvedVariables.join(", ")})
+            </span>
+          )}
+        </p>
+      )}
       {isLoading && (
         <p role="status" className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
           Sending...
