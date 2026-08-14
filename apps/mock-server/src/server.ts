@@ -15,6 +15,7 @@ import {
 } from "@api-lab/mock-engine";
 import { RouteStore } from "./store.ts";
 import { RequestLog } from "./logs.ts";
+import { registerSecurityFixtures } from "./securityFixtures.ts";
 
 export interface MockServerOptions {
   dataFile: string;
@@ -175,6 +176,15 @@ export function buildMockServer(options: MockServerOptions): FastifyInstance {
     log.clear();
     return { ok: true };
   });
+
+  // ---- Security fixtures (Milestone 12) ----
+  //
+  // Registered before the catch-all so Fastify's router prefers these exact
+  // paths. Namespaced under /__security for the same reason the admin API
+  // uses /__mock: a user's own mock route must never be shadowed by a
+  // built-in fixture. See securityFixtures.ts for why these are canned
+  // responses rather than a genuinely vulnerable application.
+  registerSecurityFixtures(app);
 
   // ---- Mock traffic — everything else, matched against the active routes ----
 

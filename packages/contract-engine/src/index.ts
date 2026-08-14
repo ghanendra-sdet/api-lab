@@ -14,3 +14,5 @@ export * from "./drift.ts";
 export * from "./coverage.ts";
 export * from "./report.ts";
 export * from "./schema.ts";
+export * from "./patternComplexity.ts";
+export * from "./patternVetting.ts";

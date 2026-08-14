@@ -1,4 +1,6 @@
 import { MAX_PATTERN_LENGTH } from "./limits.ts";
+import { checkPatternComplexity } from "./patternComplexity.ts";
+import { getRegisteredVerdict } from "./patternVetting.ts";
 
 /**
  * Static safety screening for JSON Schema `pattern` keywords (spec §41).
@@ -103,11 +105,45 @@ export function checkPatternSafety(source: string): PatternSafety {
     };
   }
 
+  // ---------------------------------------------------------------------
+  // Layer 1 (Milestone 12, spec §37): the dynamic verdict, when the host has
+  // pre-vetted this pattern in an isolated worker.
+  //
+  // Checked first because it is the only layer backed by evidence rather than
+  // heuristics — the pattern was actually executed against adversarial probes
+  // under a hard timeout, and either finished or had its worker terminated.
+  // A `safe` verdict deliberately does NOT short-circuit the layers below:
+  // surviving a 40-character probe is not proof of safety against a 10,000-
+  // character body, so the static checks still get their veto. The layers are
+  // AND-ed. See patternVetting.ts.
+  // ---------------------------------------------------------------------
+  const verdict = getRegisteredVerdict(source);
+  if (verdict === "timeout") {
+    return {
+      safe: false,
+      reason: "pattern exceeded its evaluation time budget when tested in an isolated worker",
+    };
+  }
+  if (verdict === "unsafe") {
+    return { safe: false, reason: "pattern was rejected during isolated worker vetting" };
+  }
+
   try {
     new RegExp(source);
   } catch {
     return { safe: false, reason: "pattern is not a valid JavaScript regular expression" };
   }
+
+  // ---------------------------------------------------------------------
+  // Layer 2 (Milestone 12, spec §37): blunt complexity caps, which catch the
+  // distributed-ambiguity patterns the shape check below cannot see.
+  // ---------------------------------------------------------------------
+  const complexity = checkPatternComplexity(source);
+  if (!complexity.ok) {
+    return { safe: false, reason: complexity.reason };
+  }
+
+  // Layer 3: Milestone 11's original shape screening, unchanged, below.
 
   const groupStarts: number[] = [];
   let inClass = false;

@@ -54,3 +54,45 @@ export const MAX_VIOLATIONS = 200;
 
 /** Compiled contracts kept in the validator cache (spec §42). */
 export const MAX_CACHED_CONTRACTS = 16;
+
+// ---------------------------------------------------------------------------
+// Pattern complexity limits (Milestone 12, spec §37)
+// ---------------------------------------------------------------------------
+//
+// Milestone 11 screened patterns by *shape* — reject a repeated group with an
+// ambiguous body — and said plainly that this was conservative rather than a
+// proof. Milestone 12 adds a second, independent axis: raw complexity.
+//
+// The two catch different things. Shape screening catches `(a+)+`. It does not
+// catch a pattern that is individually unambiguous at every point but has
+// forty sequential optional groups, whose combined backtracking is still
+// exponential. Complexity caps catch that class without needing to reason
+// about it, at the cost of rejecting some elaborate-but-safe patterns — an
+// acceptable trade, since a rejected pattern degrades to a warning rather
+// than a failure.
+
+/** Maximum quantifiers (`*`, `+`, `?`, `{n,m}`) in one pattern. */
+export const MAX_PATTERN_QUANTIFIERS = 20;
+
+/** Maximum group nesting depth. Nested groups multiply the number of ways a
+ * given input can be matched, which is the quantity that actually explodes. */
+export const MAX_PATTERN_GROUP_DEPTH = 5;
+
+/** Maximum alternation branches (`|`) in one pattern. */
+export const MAX_PATTERN_ALTERNATIONS = 20;
+
+/** Maximum explicit repetition count in a `{n,m}` quantifier. `a{1,50000}`
+ * compiles fine and expands to fifty thousand states at match time. */
+export const MAX_PATTERN_REPETITION = 1_000;
+
+/** Distinct patterns collected from one document for dynamic vetting. Bounds
+ * the work handed to the vetting worker. */
+export const MAX_VETTED_PATTERNS = 200;
+
+/**
+ * Wall-clock budget for evaluating a single pattern inside the isolated
+ * vetting worker. A well-behaved regex over the probe inputs completes in
+ * well under a millisecond; anything still running at 50 ms is pathological
+ * by definition, and the worker is terminated.
+ */
+export const PATTERN_VETTING_TIMEOUT_MS = 50;
