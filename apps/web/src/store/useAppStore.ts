@@ -132,7 +132,7 @@ function loadInitialState(): InitialState {
  * long-running activity with live charts, not a quick action, so it needs
  * durable screen space of its own.
  */
-export type WorkspaceView = "request" | "performance";
+export type WorkspaceView = "home" | "request" | "performance";
 
 interface AppState {
   // Layout

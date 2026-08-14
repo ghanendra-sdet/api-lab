@@ -24,9 +24,9 @@ export function createEmptyTab(overrides: Partial<RequestTabState> = {}): Reques
 
 export function createInitialTab(): RequestTabState {
   return createEmptyTab({
-    name: "Users",
+    name: "Random Users",
     method: "GET",
-    url: "https://example.com/users",
+    url: "https://api.freeapi.app/api/v1/public/randomusers",
     params: [
       { id: createId("row"), key: "page", value: "1", description: "Page number", enabled: true },
       { id: createId("row"), key: "limit", value: "10", description: "Page size", enabled: true },

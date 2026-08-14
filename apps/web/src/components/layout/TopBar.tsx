@@ -33,7 +33,12 @@ export function TopBar() {
         >
           <MenuIcon />
         </button>
-        <span className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
+        <button
+          type="button"
+          onClick={() => setActiveView("home")}
+          aria-label="Go to API Lab home"
+          className="flex items-center gap-1.5 rounded text-sm font-semibold tracking-tight hover:opacity-80"
+        >
           <span
             aria-hidden="true"
             className="flex h-5 w-5 items-center justify-center rounded bg-blue-600 text-[11px] font-bold text-white"
@@ -41,7 +46,7 @@ export function TopBar() {
             A
           </span>
           <span>API Lab</span>
-        </span>
+        </button>
         <span className="hidden text-sm text-neutral-400 sm:inline" aria-hidden="true">
           /
         </span>
