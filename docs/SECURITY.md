@@ -257,6 +257,48 @@ Severity stops at **`high`**; there is no `critical`. "Critical" from a tool tha
 
 Detection is reported as detection, not adjudication. A `password` field in a response may be an incident or a feature depending on facts API Lab does not have; the tool surfaces it and the tester decides.
 
+## Milestone 13 — Generated Documentation
+
+Generated documentation is the artifact in API Lab **most likely to leave the machine that made it**. It is designed to be exported, committed to a docs repository, pasted into a wiki, and opened months later by someone with no idea where the specification came from. That changes the threat calculus in two specific ways.
+
+### HTML injection: escaping with no bypass
+
+An OpenAPI document with `description: "<script>…</script>"` is a completely valid OpenAPI document. If that text reaches a browser as markup, the generated documentation has become a delivery mechanism for whoever wrote the specification.
+
+`escapeHtml` in `documentation-engine/src/escape.ts` is the **only** way a string becomes HTML in the package. There is no "trusted field" shortcut, no rich-text path, and deliberately **no sanitizer dependency** — spec §25 permits one where the architecture genuinely requires rich content, M13 does not require it, so the dependency and its entire bypass surface are simply absent. Five characters are escaped rather than three, because interpolation happens in attribute position as well as text position and a context-sensitive helper is a class of bug rather than a solution.
+
+`serializeForScript` handles the one position `escapeHtml` cannot: the embedded search index. `JSON.stringify` alone is **not** safe inside a `<script>` element — the HTML parser terminates the element at the literal bytes `</script`, regardless of JavaScript string quoting, so a description containing `"</script><img src=x onerror=…>"` would break out and execute in a file that passed every other escaping test. `<` and `>` are escaped to their JSON unicode escapes, which closes that and still round-trips exactly through `JSON.parse`.
+
+The embedded search script is a **fixed constant authored in this repository**. No byte of it derives from a source document, it writes results with `textContent` and never `innerHTML`, and `htmlInjection.test.ts` drives `<script>alert(1)</script>` and a `</script>` breakout payload through sixteen distinct fields — operation descriptions and summaries, parameter names and descriptions, response descriptions, example bodies, schema descriptions and property names, tag names, API titles, server URLs, security scheme names, collection names, request names, headers and query parameters — asserting each renders as escaped text.
+
+**Defence in depth in the app**: `DocumentationPreview.tsx` never calls `dangerouslySetInnerHTML`. The preview renders into an iframe via `srcDoc` with `sandbox="allow-scripts"` and deliberately **without** `allow-same-origin`, which places it in an opaque origin: it cannot read API Lab's `localStorage`, cannot touch cookies, cannot reach `window.parent`, and cannot make same-origin requests. The two flags together would be unsafe — framed script can remove its own sandbox attribute when both are set — and are never both applied. No `allow-forms`, `allow-popups`, `allow-modals` or `allow-top-navigation` either. Even in the hypothetical where the engine's escaping failed completely, the worst outcome is script running in a sealed, origin-less frame with nothing to reach.
+
+### Secret redaction: structural where possible, tested where not
+
+**The strongest control is structural.** `DocAuthentication` and `DocCollectionAuth` have no field a credential could be stored in — no `token`, no `password`, no `value`, no `key`. `describeAuth` in `apps/web/src/lib/documentationAdapt.ts` reduces a live `AuthConfig` to type, location and parameter *name* at the edge of the application, so the credential never crosses into the engine at all. Redaction that relies on remembering to call a function eventually fails; a model with nowhere to put a secret cannot leak one.
+
+**The definition of "sensitive" is reused, never duplicated.** `documentation-engine` depends on `@api-lab/security-engine` for `SENSITIVE_HEADER_NAMES`, `SENSITIVE_FIELD_NAMES` and `redactUrl`. Two lists that agree today and diverge in six months is the worst failure mode available to a security control.
+
+**Placeholders are preserved on purpose.** Spec §16 wants `Authorization: Bearer {{token}}` published and `Authorization: Bearer eyJhbGci…` never published, so documentation is generated from *unresolved* request configuration — the deliberate opposite of what Milestone 11's contract adapter does, and the reason the two adapters are separate. The exemption is governed by a **closed list of four scheme words** (`bearer`, `basic`, `token`, `apikey`) rather than a heuristic, following the reasoning M12 gives for `MutationOperation` being a closed union: a control built on "looks harmless" is one clever input away from being wrong, and nobody can tell by reading it whether it is currently correct. An unlisted scheme is redacted, which fails in the safe direction.
+
+**The canary suite found real leaks.** `secretCanary.test.ts` drives distinctive, self-identifying credentials through every field of a collection and every field of a specification, then searches every rendered byte of all three output formats plus the model itself. It caught two genuine defects during implementation that no unit test of the redactor would have found, because neither value passed through a redactor at all: an OpenAPI parameter's `default` and `example` (which reach documentation through the prose projection, not through a body), and a collection query parameter's value — both ordinary places for an API key to sit, and both being published verbatim. `redactNamedValue` and `isCredentialName` were added in response, and the canaries now pin them. A negative control asserts the suite would still catch a leak, so it cannot silently become vacuous. The same discipline is repeated end to end through the real UI in E2E scenario 6, across HTML, Markdown and JSON.
+
+**Persistence is credential-free by construction.** Only source references and settings are stored — no bodies, no headers, no examples, no rendered output.
+
+### Resource limits
+
+Documentation generation is inherently *whole-document* and *accumulating*, which contract validation is not: a specification that validates comfortably one operation at a time can still produce an HTML file large enough to lock up the tab that opens it. Hence a distinct set of caps — 1,000 documented operations (lower than contract-engine's 2,000, deliberately), 500 schemas, 16 KB per example, 8 MB per generated document, schema-describe depth 12, 200 properties per object, 2,000 search-index entries, 8 KB per free-text field.
+
+Every limit degrades to a **truncation with a recorded warning**, never to a thrown error and never to a silent omission — documentation that quietly dropped half an API would be worse than documentation that refused to generate — and the omission is stated in the rendered output, not only in the model.
+
+### What generated documentation deliberately does not do
+
+- **No external `$ref` resolution.** Following `./common.yaml#/User` or an `https://` pointer out of an imported document during generation would hand an SSRF primitive to whoever wrote the specification. Unresolvable refs are documented as such.
+- **No regex execution.** Schema `pattern` values are *printed* as documentation and never compiled; printing a hostile regex is harmless, and M11/M12's three-layer screening continues to govern execution elsewhere.
+- **No "Try Request".** Deferred per spec §31 — see ARCHITECTURE.md.
+- **No `eval`, no `Function` constructor, no dynamic code generation**, consistent with M11 and M12.
+- **No automatic promotion of real responses into documentation.** Spec §18 permits recorded responses as examples; they require explicit selection through a separate, named function, and mock-derived examples are labelled as mock-derived so nobody mistakes a fixture for the real API.
+
 ## Review Cadence
 
 This document is revisited whenever script execution is next considered (before any `script-engine` implementation begins — see the Script Execution Sandbox section's current-state note) and again at the dedicated Security Hardening milestone, and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.

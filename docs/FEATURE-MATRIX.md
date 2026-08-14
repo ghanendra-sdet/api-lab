@@ -275,10 +275,40 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Endpoint documentation from collection | P1 | 13 | Planned |
-| Request/response examples | P1 | 13 | Planned |
-| Schema documentation | P2 | 13 | Planned |
-| Collection-level documentation | P2 | 13 | Planned |
+| Endpoint documentation from collection | P1 | 13 | Done |
+| Request/response examples | P1 | 13 | Done |
+| Schema documentation | P2 | 13 | Done |
+| Collection-level documentation | P2 | 13 | Done |
+| Documentation from an OpenAPI 3.0/3.1 specification | P0 | 13 | Done |
+| Combined OpenAPI + Collection documentation, with stated precedence | P0 | 13 | Done |
+| Normalized, presentation-independent documentation model | P0 | 13 | Done |
+| Provenance labelling on every documented fact | P0 | 13 | Done |
+| Parameter documentation (path/query/header/cookie, constraints, defaults) | P0 | 13 | Done |
+| Request body documentation (content type, schema, examples) | P0 | 13 | Done |
+| Response documentation (status, headers, content type, schema) | P0 | 13 | Done |
+| Nested schema documentation | P1 | 13 | Done |
+| Recursive / circular schema handling (`User → see User`) | P0 | 13 | Done |
+| Authentication documentation (API Key / Bearer / Basic / JWT) | P0 | 13 | Done |
+| OAuth2 scheme metadata (documented, execution not claimed) | P2 | 13 | Done |
+| Secret redaction in all generated output | P0 | 13 | Done |
+| HTML escaping of all untrusted content | P0 | 13 | Done |
+| Sandboxed preview (no `dangerouslySetInnerHTML`) | P0 | 13 | Done |
+| HTML output (static site + stylesheet asset) | P0 | 13 | Done |
+| Markdown output (GitHub/GitLab flavoured) | P0 | 13 | Done |
+| JSON documentation model export | P2 | 13 | Done |
+| Navigation (overview, auth, endpoints, schemas, contract status) | P1 | 13 | Done |
+| Client-side endpoint search in generated HTML (no server) | P1 | 13 | Done |
+| Grouping by OpenAPI tag, else collection folder | P1 | 13 | Done |
+| Contract status / coverage / drift as labelled QA metadata | P2 | 13 | Done |
+| Mock-derived examples, labelled as mock-derived | P2 | 13 | Done |
+| Deterministic generation (golden-file tested) | P0 | 13 | Done |
+| Documentation preview UI + export | P0 | 13 | Done |
+| Persisted documentation configuration (references only, never output) | P2 | 13 | Done |
+| Recorded production responses as examples | P2 | 13 | Partial — supported only by explicit per-request selection; never automatic, never persisted (spec §18) |
+| "Try Request" (interactive execution from generated docs) | P2 | Future | Deferred by design (spec §31) — see ARCHITECTURE.md |
+| PDF documentation output | P2 | Future | Deferred by design (spec §43) |
+| Documentation hosting / portal / comments / analytics | P2 | Future | Deferred by design (spec §43 non-goals) |
+| AI-generated descriptions or business-logic inference | P2 | Future | Deferred by design (spec §43 non-goals) |
 
 ## Security Hardening
 

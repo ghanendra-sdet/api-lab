@@ -525,3 +525,79 @@ They are namespaced under `/__security/` rather than the spec's bare paths, for 
 ## One resolution pipeline, still
 
 `executeRequest.ts` gained an extracted `prepareRequest` — resolve variables → resolve/validate/apply auth → validate → build — which Send, the Collection Runner, and security testing all now share. A second copy of that sequence would be a correctness problem waiting to happen: if the two drifted, a security test would be mutating and sending a request materially different from the one the user configured, and every result it reported would be about the wrong request.
+
+
+# As built — Milestone 13 (API Documentation Generation)
+
+## The central decision: a third projection, not a wider contract model
+
+Milestone 13 needed descriptions, tags, examples, response descriptions and deprecation flags. Milestone 11's `ContractModel` deliberately discards every one of them — its own header comment says why: *"a contract model that mirrored the whole document would double the memory cost of every attached specification for data the validator never reads."*
+
+Three options were considered.
+
+**Widening `ContractModel` to carry prose** was rejected. It would reopen a completed milestone with no defect to fix, impose documentation's memory cost on every contract validation, and couple the validator's evolution to the documentation renderer's.
+
+**Writing a second OpenAPI parser** was rejected outright by spec §6, and rightly: two ingestion paths mean two YAML configurations to audit, two size limits to keep in sync, and two chances to disagree about what a document said.
+
+**A third projection** was chosen, because `contract-engine/src/parse.ts` had already established the pattern and written down the reasoning. Milestone 6's importer and Milestone 11's validator are *different projections of the same documents, not two ingestion mechanisms* — the importer keeps what turns operations into runnable requests, the validator keeps what validation needs, and neither carries the other's cost. `documentation-engine` is the third.
+
+Concretely, `source/openapiDoc.ts` does no ingestion at all. It reads no files, parses no YAML, interprets no schemas, and decides nothing about which operations exist. `generate/index.ts` calls contract-engine's `parseSpecSource` **once**, then feeds that single parsed value to two consumers:
+
+- `buildContractModel` → structure and normalized schemas (M11's, unchanged, with its ReDoS screening intact).
+- `extractOpenApiDocMetadata` → prose, tags, examples (M13's).
+
+One parse, two views, zero changes to Milestone 11.
+
+## The documentation model is not the contract model, and not OpenAPI
+
+Spec §4 forbids reusing OpenAPI objects directly. `Documentation` in `types.ts` exists because a documentation model has three requirements neither alternative meets: it must be **presentation-independent** (one model, three renderers), **source-agnostic** (a collection-only API produces the same shape, so renderers never branch on origin), and **safe by construction** (every string in it has already been length-capped and redacted — renderers escape, they do not redact).
+
+## Provenance is a required field, not a flag
+
+Spec §2 forbids silently inventing API behavior; spec §7 requires collection-derived material to be labelled rather than presented as contractual. Both are enforced structurally: every endpoint, example, parameter and response carries a `provenance` of `openapi` / `collection` / `mock` / `derived`. There is no way to add a fact to the model without saying where it came from, and both renderers print the label.
+
+## Source precedence: the contract defines, the collection illustrates
+
+When both sources describe the same operation, OpenAPI wins for operations, parameters, types, required flags, schemas and status codes; the collection wins for concrete request and response examples; summaries and descriptions take the spec's and fall back to the collection's.
+
+The implementation in `generate/combine.ts` is stricter than the rule needs to be: the merge can only **add** examples to a contract-derived endpoint and only **fill** an absent description. There is no code path in which a collection value replaces a contract value that exists, so the rule cannot be eroded later without deleting an explicit comment first.
+
+Endpoints the specification does not document are **kept**, in a clearly-labelled "Not in specification" group. Dropping them would have turned documentation generation into a way of *hiding* drift rather than surfacing it.
+
+## Collection-only documentation, and the honesty constraint
+
+A saved request is evidence of what somebody once sent, not a promise about what the API accepts. `generate/fromCollection.ts` therefore never marks a collection-derived parameter as required (a collection cannot know that), never synthesises a response that was not explicitly supplied, and never infers a schema from an example body — schema inference from one sample is exactly the invention spec §2 forbids.
+
+## Recursive schemas: a path-scoped visited set
+
+`User → Manager → User` is the case spec §14 names, and a naive renderer either blows the stack or emits until memory runs out. `schema/describe.ts` tracks the `$ref` pointers on the **current path** — not every ref seen anywhere — and emits `{ kind: "reference", name, note: "see User" }` on re-entry.
+
+Path-scoped rather than globally-scoped is the load-bearing detail. A global set would also collapse the second and third *sibling* use of `Address`, which is not a cycle, producing documentation where most fields are unexplained cross-references. Sibling reuse expands; only genuine recursion terminates. A separate depth cap handles documents that are deep without being circular, and both terminate with a *stated* node — a reader must be able to tell "this is recursive" from "this is all there is".
+
+## Rendering: strings, not a DOM
+
+The engine must run in Node as well as the browser, so there is no `document` to build against. Building HTML by concatenation also makes the escaping obligation visible at every call site, which is the property that matters here. `escapeHtml` is the only way a string becomes markup, with no "trusted" bypass and no sanitizer dependency to be misconfigured.
+
+The one document-derived value not HTML-escaped is the search index, which goes through `serializeForScript` instead — a *stronger* treatment for that position, since `escapeHtml` would corrupt the JSON while leaving the real `</script>` breakout risk unaddressed.
+
+## Search is a flat array, deliberately
+
+Spec §27 forbids introducing large search infrastructure and §30 requires search to work with no server. The index is a flat array of pre-lowercased haystacks scanned with `String.includes` — sub-millisecond at these sizes, zero dependencies, and it works from a `file://` URL. No Lunr, no inverted index, no stemming.
+
+The embedded script is a **fixed constant authored in the repository**; not one byte of it derives from the source document. Data is inert JSON, code is ours, and the matcher writes results with `textContent` and never `innerHTML`.
+
+## Determinism is designed in, not tested in afterwards
+
+Identical inputs produce byte-identical output in all three formats. Ids are pure functions of content (`id.ts`), every list is explicitly sorted, and there is no counter, no random component and no timestamp. `generatedAt` is **opt-in**, because a generation timestamp is the single most common way a generator quietly breaks reproducibility — and the UI warns when it is switched on.
+
+## Persistence stores references, never output
+
+Only the source reference, format, sections, grouping and example settings are persisted. Generated HTML is never the source of truth (spec §42): cached output goes stale against its own specification the moment somebody edits the spec, and a stale page that still *looks* authoritative is worse than no page. Regeneration is cheap enough that caching would buy nothing and cost correctness.
+
+## Generation is an explicit action
+
+Spec §36 forbids heavy rendering on every React render. `useDocumentationStore` produces `documentation` and `rendered` from an explicit `generate()` call, never from a `useMemo` over changing inputs. Changing the **format** re-renders from the existing model rather than regenerating it — parsing is the expensive half and is format-independent, so switching HTML ↔ Markdown is nearly free, while changing the **source** discards the previous output rather than leaving stale documentation on screen.
+
+## Try Request is deferred
+
+Spec §31 recommends it and M13 takes the recommendation. The generated artifact is a *document* that must work from a `file://` URL on a machine that has never heard of API Lab; an execution button would either not work there or would require shipping a second HTTP client into the export, which §31 also forbids. The place to send a request is the request workspace, which already has the real request engine, auth model and environment resolution behind it.
