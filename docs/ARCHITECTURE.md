@@ -429,3 +429,99 @@ Parsing a specification walks every schema in the document. `parseContractCached
 ### YAML
 
 Milestone 6 deferred OpenAPI YAML. Contract testing is where that stops being reasonable: OpenAPI documents are published as YAML far more often than as JSON, and a contract validator that cannot read the team's actual `openapi.yaml` is one nobody uses. The `yaml` package is used rather than `js-yaml` specifically because its default `parse` is already the safe mode — no constructor tags, no code execution, no object instantiation from the document, and its own alias-expansion budget bounding entity-expansion attacks. The same size limit is applied before parsing either format.
+
+---
+
+# As built — Milestone 12 (Security Hardening & Advanced API Testing)
+
+## Why a `security-engine`, and where its boundary sits
+
+The milestone allowed either `security-engine` or `negative-test-engine`. One package was shipped, named `security-engine`, because the work splits into two halves that share every primitive: *negative testing* (mutate the request, expect a controlled rejection) and *security behaviour testing* (inspect the response for disclosure, exposure, and policy). Both need the same request model, the same execution loop, the same findings vocabulary, and the same redaction rules. Splitting them would have produced two packages that imported each other.
+
+The results stay distinguishable regardless, because every result carries a `category`. `negative` asks "does this API reject bad input cleanly?" — a robustness question whose failure is a bug. `security` asks "does this API enforce its own access and disclosure rules?" — a different audience and a different urgency. Collapsing them in the report would make it less useful, not simpler.
+
+The package holds the same boundary as `runner-engine` and `contract-engine`: it knows nothing about `RequestConfig`, `AuthConfig`, or the Zustand store. `apps/web/src/lib/securityAdapt.ts` owns the one-way adaptation.
+
+## The closed mutation union is the security control
+
+`MutationOperation` is a fixed union of nine operations. A caller *cannot* express "send this arbitrary payload", because there is no operation that takes one. This is deliberate and load-bearing: it means the set of requests API Lab can be made to emit is bounded by one type declaration rather than by a caller's imagination, and "what could this tool possibly send?" is answerable by reading `types.ts`.
+
+There is no `set-arbitrary`, no `inject`, no `append-payload`, and no payload dictionary anywhere in the package. Adding one would move the product outside its stated scope and requires revisiting `docs/SECURITY.md`, not just the union.
+
+The same reasoning shapes `credentials.ts`: every credential a mutation can install is a hardcoded constant with `api-lab` written inside it. One candidate value per mutation kind, baked into source. That makes credential brute force and password spraying structurally impossible rather than merely unimplemented, and it means a server operator reading their logs after a security run can tell instantly that the traffic came from a QA tool.
+
+## Contract-aware generation, and what it deliberately refuses to generate
+
+`OpenAPI → Schema → Mutation → Invalid request → API → Expected 4xx`.
+
+The specification carries three facts a request body cannot express: which fields are **required**, what **type** each is, and what **bounds** apply. Each turns a guess into an assertion the API already agreed to — `age: integer, minimum: 18` is a promise to reject `17`.
+
+Boundary generation emits **both polarities**. `minimum - 1` expects rejection; `minimum` itself expects acceptance. An API that rejects its own declared minimum is off-by-one, which is exactly what boundary testing exists to find, and carrying an `expectValid` flag per case is what lets one generator emit both without the caller knowing which is which.
+
+What is deliberately *not* generated matters as much:
+
+- **No null mutation for a nullable field.** The contract says `null` is valid; asserting a rejection would assert the opposite of what was documented.
+- **Nothing for `anyOf`/`oneOf` branches.** A field required in one branch and optional in another has no single correct expectation.
+- **Nothing for an untyped, unbounded, non-enum field.** There is no value such a field is contractually obliged to reject.
+- **Without a schema: no required-field, boundary, or enum tests at all.** A body shows which fields are *present*, never which are *mandatory*.
+
+Each refusal surfaces as a generation warning explaining what a specification would unlock. The alternative — generating tests that fail against a conforming API — costs a developer an afternoon and then gets the whole feature muted.
+
+## The three-way verdict
+
+`evaluateSecurityTest` can return `passed`, `failed`, `warning`, `error`, or `skipped`, and the distinction between `failed` and `warning` is the design's centre of gravity:
+
+- **failed** — an expectation the tester *explicitly declared* was violated. Every path to `failed` traces back to a field the tester set.
+- **warning** — something was observed that no declared expectation covers. Reported, never folded into a pass.
+- **error** — the request did not complete, so nothing was tested. A connection refused is not a passing security test.
+- **skipped** — the request never left the machine (mutation inapplicable, run cancelled, time limit reached). Never `passed`.
+
+The consequence is deliberate asymmetry: **the tool cannot fail a test for something the tester never asked about.** That is what keeps this from becoming the kind of scanner that reports forty "vulnerabilities" against a correctly configured service. `ExpectedBehavior` therefore defaults to requiring no security headers and forbidding no sensitive data — a missing `Strict-Transport-Security` on a plaintext internal service is irrelevant, and `Access-Control-Allow-Origin: *` alone is the *correct* configuration for a public API.
+
+## Execution: bounded, sequential, and gated in the engine
+
+Limits live in the engine rather than the UI, because a limit that only exists in a dialog is one an automated caller can skip. 100 generated tests, a 10-minute ceiling, a 1 MB mutated-body cap, and strictly sequential sending with a 25 ms pause between requests.
+
+Sequential execution is an architectural boundary, not a simplification. Milestone 10 owns load generation and does it properly with a worker, a ramp, and a concurrency model. If this loop fired its hundred tests concurrently it would become a second, worse load generator that users could point at production while believing they were running a functional check. The traffic profile of a security run is indistinguishable from a person clicking Send quickly, and the two architectures stay separate until a future milestone combines them explicitly.
+
+The security pass in the Collection Runner runs **after** the functional pass, never interleaved. A security test deliberately removes the credential or corrupts the body; doing that between two chained functional requests would poison the runtime variables the second depends on.
+
+## Target confirmation compares hosts, not booleans
+
+`assertTargetConfirmed` takes the host the user actually approved and compares it against the host the request actually resolved to. A per-run "user confirmed" boolean would let an approval for `staging.example.com` be silently reused for a run that, after variable resolution, points at `api.example.com`. Every distinct host in a run must be individually approved.
+
+Only loopback is frictionless. Private RFC 1918 addresses are treated as **remote**, because `10.0.0.5` is very often a shared staging box or a colleague's machine, and "it's on the internal network" has never been a reason it was fine to fire a hundred malformed requests at it unannounced.
+
+## ReDoS: why static screening had to be joined by a worker
+
+Milestone 11 screened `pattern` keywords by shape and said in its own comments that this was conservative rather than a proof. Milestone 12 found the concrete blind spot:
+
+```
+^[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+$
+```
+
+Ten consecutive quantified groups. No nested quantifier, no ambiguous group body, ten quantifiers against a limit of twenty, zero group nesting, zero alternations — it passes **every** static check API Lab has. Measured against a 40-character non-matching input it was still running after **8 seconds**. The ambiguity is distributed *across* the groups rather than contained in one, which is precisely the class no shape heuristic catches.
+
+Three layers now apply, AND-ed rather than OR-ed:
+
+1. **Shape screening** (M11) — nested quantifiers, ambiguous alternation in a repeated group.
+2. **Complexity caps** (M12) — quantifier count, group nesting depth, alternation count, explicit repetition bounds.
+3. **Isolated worker vetting** (M12) — the pattern is actually executed against adversarial probes on a disposable thread with a hard 50 ms budget.
+
+Layer 3 exists because **JavaScript cannot interrupt a running regex.** There is no timeout on `RegExp.test`, no cancellation, and no yield point; once backtracking starts, that thread is gone. `Worker.terminate()` is the only mechanism in the platform that stops it, and it only works if the regex is running on a thread we are willing to destroy.
+
+Vetting is **pre-flight**, once per document, at import and at restore-from-storage. Validation is synchronous and sits inside the request pipeline; it cannot await a worker round-trip without making every Send asynchronous on a subsystem most users never touch. Verdicts land in a module-level registry in `contract-engine` that `redos.ts` consults *first* — a registry consulted at the single screening point cannot be bypassed by a caller forgetting to thread a parameter through five call sites. A `timeout` verdict also clears the parse cache, since a model built before the verdict was registered still contains the pattern.
+
+A `safe` verdict deliberately does **not** loosen the static layers. Surviving a 40-character probe is not proof of safety against a 10,000-character body.
+
+`contract-engine` stays pure throughout: it supplies `collectPatterns`, `buildProbeInputs`, and `evaluatePatternSafety` (the only function in the package that ever executes an untrusted regex, and the only thing the worker calls), while `apps/web` owns the actual `Worker`, the timeout, and the `terminate()`. Where no `Worker` exists — jsdom tests, non-browser hosts — the dynamic layer degrades to a no-op and the two static layers still apply.
+
+## Mock-server fixtures are fixtures, not a vulnerable app
+
+`/verbose-error` does not *have* a bug that produces a stack trace; it returns a hardcoded string that looks like one. There is no Python, no database, and no code path that could be induced to disclose anything real. A genuinely vulnerable endpoint shipped in a developer tool is a genuinely vulnerable endpoint — it runs on developer machines, sometimes shared ones, and "it's only for testing" has never stopped that from being true. Fixtures give the engine identical test coverage with none of that risk.
+
+They are namespaced under `/__security/` rather than the spec's bare paths, for the same reason the admin API uses `/__mock`: a user who legitimately wants to mock their own `/validation` endpoint must not find it shadowed by a built-in.
+
+## One resolution pipeline, still
+
+`executeRequest.ts` gained an extracted `prepareRequest` — resolve variables → resolve/validate/apply auth → validate → build — which Send, the Collection Runner, and security testing all now share. A second copy of that sequence would be a correctness problem waiting to happen: if the two drifted, a security test would be mutating and sending a request materially different from the one the user configured, and every result it reported would be about the wrong request.

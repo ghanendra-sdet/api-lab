@@ -182,6 +182,81 @@ An OpenAPI document is untrusted input. It is typically fetched from a registry,
 - **Storage.** Attached specifications live in `localStorage["api-lab-contracts"]` in a versioned Zod-validated envelope, and the 5MB size limit is enforced on **load** as well as on import — data in `localStorage` is as untrusted as data from a file, since anything with access to the origin could have written it. A specification is an API description rather than a credential, but a private, unpublished specification is still information stored in plaintext in the browser profile, which is the same posture as every other API Lab artifact.
 - **Unsupported validation is never hidden behind a green PASS.** Formats the validator does not assert, serialization styles API Lab does not implement, skipped regexes, and oversized bodies all produce explicit warning-severity entries that are surfaced separately in the UI and in every export.
 
+## Security & Negative API Testing (Milestone 12)
+
+Milestone 12 is the first feature in which **API Lab composes requests the user did not type** — up to a hundred of them, some deliberately omitting credentials or carrying malformed bodies. The security model is therefore about bounding what the tool can emit, and about never leaking what it observes.
+
+### Scope: what this is, and what it is explicitly not
+
+API Lab is a QA and API testing platform. It is **not** a vulnerability scanner, an exploitation framework, or a discovery tool. The following are **explicit non-goals** and are not implemented: port scanning, network or subnet scanning, endpoint discovery, credential attacks, brute force, password spraying, exploit payload libraries, remote code execution, command execution, reverse shells, automated exploitation, SQL/command injection exploit automation, SSRF exploitation, credential harvesting, stealth or evasion, WAF bypass, distributed scanning, and AI exploit generation.
+
+**The difference between QA security testing and penetration testing**, as this product draws it: QA security testing asks whether an API *enforces the rules it already documented* — reject invalid input, require the credential, do not leak the stack trace — using requests the tester explicitly configured against a target they explicitly authorised. Penetration testing asks what an attacker could *achieve*, which requires discovery, creativity, and exploitation. API Lab does the first and is architecturally prevented from doing the second.
+
+### The closed mutation vocabulary is the primary control
+
+`MutationOperation` in `@api-lab/security-engine` is a **fixed union of nine operations**: remove, wrong-type, null, empty, boundary, invalid-enum, malform-json, set-content-type, set-invalid-auth. There is no operation that accepts an arbitrary payload, so a caller cannot express one. The complete set of requests API Lab can be made to emit is bounded by one type declaration rather than by a caller's imagination.
+
+Every credential a mutation can install is a hardcoded, self-identifying constant in `credentials.ts` — `api-lab-invalid-token-do-not-honour`, a precomputed JWT whose `exp` is 2001-09-09 and whose signature is the base64 of an English sentence. One candidate per mutation kind, baked into source. **Credential brute force and password spraying are therefore structurally impossible, not merely unimplemented**, and a server operator reading their logs can tell instantly that the traffic came from a QA tool rather than an attacker.
+
+Authorization testing (§13) generates **nothing** automatically: there is no safe way to invent another user's resource id, and any id the tool guessed would either be meaningless or be exactly the enumeration that is out of scope. The supported workflow is the tester saving a second request pointing at a resource they own but are not authenticated for.
+
+### Target restrictions
+
+- Only **loopback** targets run without a prompt. Everything else — including private RFC 1918 addresses — requires explicit confirmation naming the host, because `10.0.0.5` is very often a shared staging server or a colleague's machine.
+- Confirmation compares the **approved host against the resolved host**, not a per-run boolean. An approval for `staging.example.com` cannot be silently reused after a variable resolves to `api.example.com`. Every distinct host in a run must be approved individually.
+- The gate is enforced in the engine (`assertTargetConfirmed`, `checkRunPreconditions`), before a single request is sent, and refuses the whole suite rather than failing partway. A UI-only prompt would be skippable by an automated caller.
+- A non-HTTP scheme or an unparseable URL is classified `invalid` and refused, rather than defaulting toward "local".
+
+### Resource limits
+
+All enforced in the engine, not the UI: **100** generated tests per run, a **10-minute** execution ceiling, **1 MB** maximum mutated body, **4096** characters maximum synthesized string (so a document declaring `maxLength: 50000000` produces a 4 KB string and a warning, not a 50 MB request), **512 KB** maximum scanned response body, **50** findings per result, **12** tests per operation, and a depth-12 / 200-field cap on body and schema walks. Requests are sent **strictly sequentially** with a 25 ms pause — Milestone 10 owns load generation, and a security run must never become a second one.
+
+Every test that does not execute is reported `skipped` with a reason. A truncated or cancelled run never reports a clean bill of health for checks that did not run.
+
+### Secret handling
+
+A security report is the artifact in this product most likely to be pasted into a ticket or a chat channel. A tool that leaked the secrets it found would have caused a bigger problem than the one it reported.
+
+- **Findings never contain sensitive values.** A detected `accessToken` produces "field `response.body/accessToken` (value withheld)". `describeSensitiveField` is the only permitted way to build such evidence, and a unit test asserts the serialized result does not contain the value.
+- **URLs are redacted** of RFC 3986 userinfo and of query parameters whose *name* looks like a credential. Results store path + query only; the host appears once, in the report header.
+- **Generated test definitions are credential-free by construction.** A `NegativeTest` holds a request *id*, and a `Mutation` can only name a fixed constant — never a resolved value. Credentials are materialised at execution time, in memory, per request, via a `resolveRequest` callback.
+- **Only definitions are persisted.** Results, findings, responses, statuses, and durations are session-scoped in memory and gone on reload. `localStorage["api-lab-security"]` holds a versioned, Zod-validated envelope containing test definitions only — and the Zod schema pins the mutation vocabulary, so a hand-edited entry cannot smuggle a new operation into the engine.
+- **Logging.** Nothing in the security path logs `Authorization`, `Cookie`, API keys, tokens, or request bodies. The mock server's `HEADER_DENYLIST` continues to document the headers request inspection must always mask.
+- **CSV export neutralises formula injection.** A field beginning `=`, `+`, `-`, `@`, tab, or carriage return is prefixed with an apostrophe. Finding messages derive from response content, so without this an API could return a field name that becomes a live formula on the machine of whoever opens the report — an especially poor irony for a security tool.
+
+### ReDoS: static screening was not sufficient, and this was measured
+
+Milestone 11 screened schema `pattern` keywords by shape and documented that check as conservative rather than a proof. Milestone 12 identified the concrete blind spot:
+
+```
+^[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+$
+```
+
+Ten consecutive quantified groups: no nested quantifier, no ambiguous group body, ten quantifiers (limit 20), zero group nesting (limit 5), zero alternations (limit 20). It passes **every** static check — and was measured **still running after 8 seconds** against a 40-character non-matching input. The ambiguity is distributed *across* the groups rather than contained in one, which is the class no shape heuristic detects. A dedicated test (`redosGap.test.ts`) pins this down permanently so nobody later concludes static screening is sufficient and removes the mitigation.
+
+Three layers now apply, **AND-ed rather than OR-ed** — any one may veto, and a `safe` dynamic verdict never loosens a static rejection:
+
+1. **Shape screening** (M11, unchanged) — nested quantifiers and ambiguous alternation inside repeated groups.
+2. **Complexity caps** (M12) — at most 20 quantifiers, group nesting depth 5, 20 alternations, and explicit `{n,m}` repetition bounded at 1,000 (an open-ended `{2,}` counts as exceeding it).
+3. **Isolated worker vetting** (M12) — the pattern is genuinely executed against bounded adversarial probes on a disposable thread with a hard **50 ms** budget, and the worker is **terminated** if it does not return.
+
+Layer 3 exists because **JavaScript provides no way to interrupt a running regular expression** — no timeout on `RegExp.test`, no cancellation, no yield point. `Worker.terminate()` is the only mechanism in the platform that can stop one, and it only works if the regex is running on a thread we are prepared to destroy. Vetting is pre-flight (once per document, at import and at restore-from-storage), so the UI thread never executes an unvetted pattern; a `timeout` verdict is registered permanently and additionally clears the contract parse cache, since a model built before the verdict still contained the pattern. Where no `Worker` exists the dynamic layer degrades to a no-op and the two static layers remain in force — never leaving the application unprotected, and never throwing.
+
+Consistent with Milestone 11's precedent, there is **no `eval`, no `Function` constructor, and no dynamic code generation** anywhere in the new code. The information-disclosure detector deliberately uses **literal substring matching only** — not one regular expression — so the scan is linear regardless of what a response contains.
+
+### Schema and YAML hardening
+
+- Schema walks are bounded on every axis: depth (12 for body/field collection, 64 for normalization), field count (200), operations (2,000), specification size (5 MB), and `$ref` cycle detection that terminates on recursive schemas.
+- **External `$ref` is never resolved.** Following `./common.yaml#/X` or an `https://` pointer out of an imported document would hand an SSRF primitive to whoever wrote the specification.
+- `__proto__`, `constructor`, and `prototype` are refused as JSON-pointer tokens, skipped when collecting schema properties, and skipped during body walks — extending the existing hardening in `environment-engine` and `runner-engine`.
+- The **M11 YAML configuration was re-audited against §39** and confirmed already safe: the `yaml` package's default `parse` honours no custom tags, constructs no objects, executes no code, and enforces its own alias-expansion budget. Nine regression tests now pin this — `!!js/function`, `!!js/undefined`, and `!!python/object/apply` tags are all confirmed inert, prototype pollution via a `__proto__` key is confirmed not to occur, the size limit is confirmed enforced before parsing, and a 300-level-deep document is confirmed not to overflow the stack — so a future dependency bump that reintroduced tag handling would fail the build.
+
+### Findings discipline
+
+Severity stops at **`high`**; there is no `critical`. "Critical" from a tool that has not proven exploitability is noise: it escalates, and when it turns out to be documented internal behaviour the whole report loses credibility. `high` additionally **requires evidence**, enforced in `createFinding` by downgrading unevidenced findings to `medium` with a note. Remediation text is QA-oriented and never an exploitation instruction.
+
+Detection is reported as detection, not adjudication. A `password` field in a response may be an incident or a feature depending on facts API Lab does not have; the tool surfaces it and the tester decides.
+
 ## Review Cadence
 
 This document is revisited whenever script execution is next considered (before any `script-engine` implementation begins — see the Script Execution Sandbox section's current-state note) and again at the dedicated Security Hardening milestone, and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.

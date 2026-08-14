@@ -284,12 +284,48 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 
 | Feature | Priority | Phase | Status |
 |---|---:|---:|---|
-| Script sandbox (isolated execution) | P0 | 12 | Planned |
-| SSRF protection (mock/proxy layer) | P0 | 12 | Planned |
-| Credential storage protection | P0 | 12 | Planned |
-| Script resource limits (time/memory) | P0 | 12 | Planned |
-| XSS protection (response rendering) | P0 | 12 | Planned |
-| Prototype pollution protection | P0 | 12 | Planned |
+| ReDoS hardening — pattern complexity limits | P0 | 12 | Done |
+| ReDoS hardening — isolated worker + hard timeout | P0 | 12 | Done |
+| Schema resource limits (depth, size, recursion, `$ref` cycles) | P0 | 12 | Done |
+| YAML parser security review + regression tests | P0 | 12 | Done |
+| Credential storage protection (persistence audit) | P0 | 12 | Done |
+| Secret redaction in results, reports and exports | P0 | 12 | Done |
+| Prototype pollution protection (JSON pointer + schema walk) | P0 | 12 | Done |
+| CSV formula-injection protection in exports | P1 | 12 | Done |
+| Script sandbox (isolated execution) | P0 | — | Not applicable — scripts are never executed (see SECURITY.md) |
+| SSRF protection (mock/proxy layer) | P0 | Future | Deferred — no server-side proxy exists yet |
+| XSS protection (response rendering) | P0 | — | Done in M2 — responses render as text, never as HTML |
+
+## Security & Negative API Testing
+
+| Feature | Priority | Phase | Status |
+|---|---:|---:|---|
+| Negative test generator (categories, preview, approval) | P0 | 12 | Done |
+| Contract-aware negative testing from OpenAPI | P0 | 12 | Done |
+| Missing required field mutation | P0 | 12 | Done |
+| Invalid type mutation | P0 | 12 | Done |
+| Null / empty value mutations | P0 | 12 | Done |
+| Boundary value mutations (both polarities) | P0 | 12 | Done |
+| Invalid enum mutation | P1 | 12 | Done |
+| Malformed JSON mutation | P1 | 12 | Done |
+| Path / query parameter mutations | P1 | 12 | Done |
+| Header + unexpected content-type mutations | P1 | 12 | Done |
+| Authentication negative tests (missing/invalid/expired/malformed) | P0 | 12 | Done |
+| Sensitive-data exposure detection | P0 | 12 | Done |
+| Security header checks (configurable) | P1 | 12 | Done |
+| CORS configuration checks | P1 | 12 | Done |
+| Transport (HTTP vs HTTPS) check | P2 | 12 | Done |
+| Information-disclosure detection | P0 | 12 | Done |
+| Error-handling robustness check | P1 | 12 | Done |
+| Findings with severity + remediation | P0 | 12 | Done |
+| Security report + JSON/CSV export | P1 | 12 | Done |
+| Execution limits (100 tests, 10 minutes, sequential) | P0 | 12 | Done |
+| Non-local target confirmation | P0 | 12 | Done |
+| Mock-server security fixtures | P1 | 12 | Done |
+| Collection Runner integration + result categories | P1 | 12 | Done |
+| Environment / auth / chaining integration | P1 | 12 | Done |
+| Authorization testing (second explicit resource id) | P2 | 12 | Partial — supported via a second saved request; no automatic enumeration by design |
+| Combining load generation with security mutation | P2 | Future | Deferred by design (see ARCHITECTURE.md) |
 
 ## Future Protocols (Roadmap Only — Not Scheduled)
 
