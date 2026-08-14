@@ -4,10 +4,11 @@ import {
   validateJsonBody,
   validateUrl,
   type ApiResponseResult,
+  type BuiltRequest,
   type ValidationError,
 } from "@api-lab/request-engine";
 import { buildVariableContext, resolveRequestConfig, type Environment } from "@api-lab/environment-engine";
-import { applyAuth, validateAuthConfig } from "@api-lab/auth-engine";
+import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
 import { evaluateAssertions, buildTestResult, type TestResult } from "@api-lab/test-engine";
 import { extractAll, mergeResolutionContext, type ExtractionResult } from "@api-lab/runner-engine";
 import {
@@ -16,6 +17,7 @@ import {
   type ContractValidationResult,
 } from "@api-lab/contract-engine";
 import type { RequestConfig } from "@api-lab/workspace-engine";
+import type { KeyValueRow } from "@api-lab/shared";
 import { resolveAuthConfig } from "./authResolve";
 import { resolveAssertions } from "./resolveAssertions";
 import { buildContractRequestInput } from "./contractAdapt";
@@ -73,21 +75,35 @@ export interface ExecutionScopes {
 }
 
 /**
- * Resolves, validates, sends, asserts, and extracts for one request config,
- * fully independent of any open tab's state — this is the isolation the
- * Collection Runner needs (see docs/ARCHITECTURE.md's Milestone 7/8
- * sections): calling this never reads or writes `tabs`, `responses`, or any
- * other tab-scoped store state. The caller decides what to do with the
- * result, including whether extracted variables feed into a later call.
+ * The shared front half of the execution pipeline: resolve variables →
+ * resolve/validate/apply auth → validate → build.
+ *
+ * Extracted in Milestone 12 so security testing composes the *same* pipeline
+ * rather than reimplementing it. A second copy of this sequence would be a
+ * correctness problem waiting to happen: if the two drifted, a security test
+ * would be mutating and sending a request materially different from the one
+ * Send and the Runner produce, and every result it reported would be about a
+ * request the user never configured.
+ *
+ * Returns either the built request plus the intermediate values later stages
+ * need, or the same typed `ValidationError` the caller already handles.
  */
-export async function executeRequestConfig(
+export interface PreparedRequest {
+  context: Record<string, string>;
+  built: BuiltRequest;
+  /** Query params after auth was applied — the contract and security
+   * adapters both need these separately from the URL. */
+  params: KeyValueRow[];
+  /** The auth config after variable resolution. Never persisted. */
+  resolvedAuth: AuthConfig;
+}
+
+export function prepareRequest(
   requestId: string,
   requestName: string,
   config: RequestConfig,
   scopes: ExecutionScopes,
-  signal?: AbortSignal,
-  contractOptions?: ContractExecutionOptions,
-): Promise<ExecuteRequestResult> {
+): { ok: true; prepared: PreparedRequest } | { ok: false; validationError: ValidationError } {
   const context = mergeResolutionContext({
     environment: buildVariableContext(scopes.environment),
     runtime: scopes.runtime ?? {},
@@ -161,6 +177,30 @@ export async function executeRequestConfig(
     bodyRawContent: resolved.bodyRawContent,
   });
 
+  return { ok: true, prepared: { context, built, params: withAuth.params, resolvedAuth: authResolution.resolved } };
+}
+
+/**
+ * Resolves, validates, sends, asserts, and extracts for one request config,
+ * fully independent of any open tab's state — this is the isolation the
+ * Collection Runner needs (see docs/ARCHITECTURE.md's Milestone 7/8
+ * sections): calling this never reads or writes `tabs`, `responses`, or any
+ * other tab-scoped store state. The caller decides what to do with the
+ * result, including whether extracted variables feed into a later call.
+ */
+export async function executeRequestConfig(
+  requestId: string,
+  requestName: string,
+  config: RequestConfig,
+  scopes: ExecutionScopes,
+  signal?: AbortSignal,
+  contractOptions?: ContractExecutionOptions,
+): Promise<ExecuteRequestResult> {
+  const preparation = prepareRequest(requestId, requestName, config, scopes);
+  if (!preparation.ok) return { ok: false, validationError: preparation.validationError };
+
+  const { context, built, params: withAuthParams } = preparation.prepared;
+
   // ---------------------------------------------------------------------
   // Contract validation (Milestone 11)
   //
@@ -175,7 +215,7 @@ export async function executeRequestConfig(
         config.method,
         built.url,
         built.headers,
-        withAuth.params,
+        withAuthParams,
         built.body,
       )
     : null;

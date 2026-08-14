@@ -6,6 +6,7 @@ import {
   flattenCollectionRequests,
   summarizeRunner,
   summarizeRunnerContract,
+  summarizeRunnerCategories,
   type RunnerItemStatus,
 } from "../../lib/runner";
 import { ContractViolationList } from "../contract/ContractViolationList";
@@ -52,6 +53,9 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const runnerDatasetName = useAppStore((s) => s.runnerDatasetName);
   const setRunnerDataset = useAppStore((s) => s.setRunnerDataset);
   const runnerValidateContract = useAppStore((s) => s.runnerValidateContract);
+  const runnerIncludeSecurity = useAppStore((s) => s.runnerIncludeSecurity);
+  const setRunnerIncludeSecurity = useAppStore((s) => s.setRunnerIncludeSecurity);
+  const runnerSecurityResults = useAppStore((s) => s.runnerSecurityResults);
   const setRunnerValidateContract = useAppStore((s) => s.setRunnerValidateContract);
   const contracts = useContractStore((s) => s.contracts);
   const startRunner = useAppStore((s) => s.startRunner);
@@ -70,6 +74,7 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   const hasResults = runnerState.status === "completed" || runnerState.status === "cancelled";
   const summary = summarizeRunner(runnerState);
   const contractSummary = summarizeRunnerContract(runnerState);
+  const categorySummary = summarizeRunnerCategories(runnerState, runnerSecurityResults);
   const boundSpecification = findSpecificationForCollection(contracts, collection.id);
 
   function toggleSelected(id: string) {
@@ -185,6 +190,23 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                 )}
               </label>
 
+              {/* Security pass (Milestone 12, spec §32). Off by default: it
+                  sends additional, deliberately malformed requests, which must
+                  never be something enabled by accident. Runs after the
+                  functional pass, with its results counted separately. */}
+              <label className="mb-3 flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={runnerIncludeSecurity}
+                  onChange={(e) => setRunnerIncludeSecurity(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 text-blue-600 dark:border-neutral-700"
+                />
+                Run generated security tests after the collection
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                  (generate them in the Security dialog first)
+                </span>
+              </label>
+
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Dataset (optional)
               </p>
@@ -264,6 +286,18 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
                     {contractSummary.warnings}
                   </p>
                 )}
+                {/* Per-category counts (spec §22, §32). Never summed into a
+                    headline number — the sum would be the least informative
+                    figure available. */}
+                <p
+                  data-testid="runner-category-summary"
+                  className="mt-1 border-t border-neutral-100 pt-1 text-xs text-neutral-600 dark:border-neutral-800 dark:text-neutral-300"
+                >
+                  Functional: {categorySummary.functional.passed}/{categorySummary.functional.total} ·{" "}
+                  Contract: {categorySummary.contract.passed}/{categorySummary.contract.total} ·{" "}
+                  Security: {categorySummary.security.passed}/{categorySummary.security.total} ·{" "}
+                  Negative: {categorySummary.negative.passed}/{categorySummary.negative.total}
+                </p>
               </div>
 
               {runnerState.iterations.map((iteration) => {

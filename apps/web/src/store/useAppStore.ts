@@ -57,6 +57,10 @@ import {
   createIdleRunnerState,
   type RunnerState,
 } from "../lib/runner";
+import { runSecurityTests, type SecurityTestResult } from "@api-lab/security-engine";
+import { resolveSecurityRequest } from "../lib/securityAdapt";
+import { browserSecurityExecutor } from "../lib/securityRun";
+import { useSecurityStore } from "./useSecurityStore";
 import {
   loadEnvironmentsFromStorage,
   loadTabsFromStorage,
@@ -259,6 +263,17 @@ interface AppState {
   /** "Validate contract after response" in the Runner (spec §29). */
   runnerValidateContract: boolean;
   setRunnerValidateContract: (enabled: boolean) => void;
+  /**
+   * Whether a collection run also executes the generated security suite
+   * (Milestone 12, spec §32). Off by default: a security pass sends extra
+   * requests, some deliberately malformed, and that must never be something a
+   * user turns on by accident while running their functional collection.
+   */
+  runnerIncludeSecurity: boolean;
+  setRunnerIncludeSecurity: (enabled: boolean) => void;
+  /** Security results from the most recent run. Session-only, never persisted
+   * (see lib/securityPersistence.ts). */
+  runnerSecurityResults: SecurityTestResult[];
   startRunner: (
     collectionId: string,
     requestIds: string[],
@@ -759,6 +774,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRunnerDataset: (dataset, name) => set({ runnerDataset: dataset, runnerDatasetName: name }),
   runnerValidateContract: false,
   setRunnerValidateContract: (enabled) => set({ runnerValidateContract: enabled }),
+  runnerIncludeSecurity: false,
+  setRunnerIncludeSecurity: (enabled) => set({ runnerIncludeSecurity: enabled }),
+  runnerSecurityResults: [],
 
   startRunner: async (collectionId, requestIds, environmentId, stopOnFailure) => {
     const state = get();
@@ -780,6 +798,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({
       runnerAbortController: controller,
+      runnerSecurityResults: [],
       runnerState: {
         status: "running",
         collectionId,
@@ -876,6 +895,51 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const wasCancelled = controller.signal.aborted;
+
+    // ---------------------------------------------------------------------
+    // Security pass (Milestone 12, spec §32)
+    //
+    // Runs *after* the functional pass, never interleaved with it. Two
+    // reasons. First, a security test deliberately removes the credential or
+    // corrupts the body; doing that between two chained functional requests
+    // would poison the runtime variables the second one depends on. Second,
+    // keeping the passes separate is what lets the report show Functional /
+    // Contract / Security counts that each mean exactly one thing.
+    //
+    // Results are categorised by the engine and stored separately — they are
+    // never folded into the Runner's own pass/fail totals (spec §22).
+    // ---------------------------------------------------------------------
+    if (!wasCancelled && get().runnerIncludeSecurity) {
+      const securityState = useSecurityStore.getState();
+      const runnableIds = new Set(flat.map((entry) => entry.id));
+      const applicable = securityState.security.tests.filter(
+        (test) => test.enabled && runnableIds.has(test.targetRequestId),
+      );
+
+      if (applicable.length > 0) {
+        const outcome = await runSecurityTests({
+          tests: applicable,
+          resolveRequest: (requestId) => {
+            const entry = flat.find((candidate) => candidate.id === requestId);
+            if (!entry) return null;
+            const resolved = resolveSecurityRequest(
+              entry.id,
+              entry.name,
+              entry.request,
+              { environment },
+              contract.options?.contract ?? null,
+            );
+            return resolved.ok && resolved.request ? resolved.request : null;
+          },
+          executor: browserSecurityExecutor,
+          confirmedHosts: securityState.confirmedHosts,
+          signal: controller.signal,
+        });
+
+        set({ runnerSecurityResults: outcome.results });
+      }
+    }
+
     set((s) => ({
       runnerAbortController: null,
       runnerState: {

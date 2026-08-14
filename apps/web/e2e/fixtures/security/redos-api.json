@@ -1,0 +1,47 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ReDoS Fixture API",
+    "version": "1.0.0",
+    "description": "A specification carrying a catastrophically-backtracking `pattern` that passes every static screening layer API Lab has. Milestone 11's shape screening sees no nested quantifier and no alternation inside a repeated group; Milestone 12's complexity caps see 10 quantifiers (limit 20), zero group nesting and zero alternations. The ambiguity is distributed across the groups rather than contained in one. Measured still running after 8 seconds against a 40-character non-matching input. Only the isolated vetting worker catches it."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4010"
+    }
+  ],
+  "paths": {
+    "/__security/validation": {
+      "post": {
+        "operationId": "createPatternedUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Invalid"
+          }
+        }
+      }
+    }
+  }
+}

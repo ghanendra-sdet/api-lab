@@ -14,6 +14,7 @@ import {
   resetContractsStorage,
   saveContractsToStorage,
 } from "../lib/contractPersistence";
+import { vetSpecificationSource } from "../lib/patternVetting";
 
 /**
  * Attached specifications, their collection bindings, and which operations
@@ -45,6 +46,23 @@ function loadInitial(): InitialContractState {
 
 export type ImportSpecResult = { ok: true; id: string } | { ok: false; detail: string };
 
+/**
+ * Status of the isolated ReDoS pattern vetting for the specifications
+ * currently loaded (Milestone 12, spec §37).
+ *
+ * Surfaced in the UI rather than kept internal, because "the check was
+ * skipped" and "the check passed" must never look the same — the same rule
+ * contract-engine applies to its own validation warnings. `degraded` means no
+ * Worker was available and only the two static layers are in force.
+ */
+export interface PatternVettingState {
+  status: "idle" | "running" | "done";
+  vetted: number;
+  timedOut: number;
+  unsafe: number;
+  degraded: boolean;
+}
+
 interface ContractState {
   contracts: ContractWorkspace;
   contractsLoadError: string | null;
@@ -64,6 +82,10 @@ interface ContractState {
    */
   activeSpecificationId: string | null;
   setActiveSpecification: (specId: string | null) => void;
+
+  patternVetting: PatternVettingState;
+  /** Executes worker-isolated pattern vetting for one specification's source. */
+  vetSpecification: (source: string) => Promise<void>;
 
   importSpecification: (name: string, source: string) => ImportSpecResult;
   removeSpecification: (specId: string) => void;
@@ -85,6 +107,24 @@ export const useContractStore = create<ContractState>((set, get) => {
     activeSpecificationId: null,
     setActiveSpecification: (specId) => set({ activeSpecificationId: specId }),
 
+    patternVetting: { status: "idle", vetted: 0, timedOut: 0, unsafe: 0, degraded: false },
+
+    vetSpecification: async (source) => {
+      set((s) => ({ patternVetting: { ...s.patternVetting, status: "running" } }));
+      const summary = await vetSpecificationSource(source);
+      set((s) => ({
+        patternVetting: {
+          status: "done",
+          // Accumulated across specifications: the verdict registry is global,
+          // so a per-document counter would understate what is in force.
+          vetted: s.patternVetting.vetted + summary.vetted,
+          timedOut: s.patternVetting.timedOut + summary.timedOut.length,
+          unsafe: s.patternVetting.unsafe + summary.unsafe.length,
+          degraded: summary.degraded,
+        },
+      }));
+    },
+
     importSpecification: (name, source) => {
       // Parsed eagerly so an unusable document is rejected at import time
       // rather than surfacing later as a mysterious validation failure.
@@ -104,6 +144,15 @@ export const useContractStore = create<ContractState>((set, get) => {
       set((s) => ({
         contracts: { specifications: [...s.contracts.specifications, specification] },
       }));
+
+      // Vetting is asynchronous (it round-trips through a worker) while import
+      // is synchronous, so it is started here and awaited by nobody. That is
+      // safe because it can only ever *tighten* screening: until it completes,
+      // the two static layers are already rejecting patterns, and when it
+      // completes it invalidates the parse cache so any newly-vetoed pattern is
+      // stripped from the model. See lib/patternVetting.ts.
+      void get().vetSpecification(source);
+
       return { ok: true, id: specification.id };
     },
 
@@ -191,6 +240,14 @@ export function findSpecificationForCollection(
 ): AttachedSpecification | undefined {
   if (collectionId === undefined) return undefined;
   return contracts.specifications.find((spec) => spec.collectionIds.includes(collectionId));
+}
+
+// Specifications restored from storage are vetted too. localStorage is as
+// untrusted as a file — a hostile pattern persisted in a previous session
+// must not get a free pass just because it is no longer arriving through the
+// import path.
+for (const restored of useContractStore.getState().contracts.specifications) {
+  void useContractStore.getState().vetSpecification(restored.source);
 }
 
 // Persist (debounced) whenever the attached specifications change, skipping

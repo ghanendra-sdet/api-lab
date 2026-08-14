@@ -3,6 +3,7 @@ import { useAppStore } from "../../store/useAppStore";
 import { EnvironmentManager } from "../environments/EnvironmentManager";
 import { MockServerManager } from "../mock/MockServerManager";
 import { ContractManager } from "../contract/ContractManager";
+import { SecurityManager } from "../security/SecurityManager";
 
 const MANAGE_ENVIRONMENTS_VALUE = "__manage__";
 
@@ -19,6 +20,7 @@ export function TopBar() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [mockManagerOpen, setMockManagerOpen] = useState(false);
   const [contractManagerOpen, setContractManagerOpen] = useState(false);
+  const [securityManagerOpen, setSecurityManagerOpen] = useState(false);
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 dark:border-neutral-800 dark:bg-neutral-950">
@@ -119,6 +121,15 @@ export function TopBar() {
 
         <button
           type="button"
+          onClick={() => setSecurityManagerOpen(true)}
+          aria-label="Security"
+          className="rounded px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+        >
+          Security
+        </button>
+
+        <button
+          type="button"
           onClick={toggleTheme}
           aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
@@ -129,6 +140,7 @@ export function TopBar() {
       {managerOpen && <EnvironmentManager onClose={() => setManagerOpen(false)} />}
       {mockManagerOpen && <MockServerManager onClose={() => setMockManagerOpen(false)} />}
       {contractManagerOpen && <ContractManager onClose={() => setContractManagerOpen(false)} />}
+      {securityManagerOpen && <SecurityManager onClose={() => setSecurityManagerOpen(false)} />}
     </header>
   );
 }

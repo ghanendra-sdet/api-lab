@@ -3,6 +3,7 @@ import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine
 import type { TestResult } from "@api-lab/test-engine";
 import type { ExtractionResult } from "@api-lab/runner-engine";
 import type { ContractValidationResult } from "@api-lab/contract-engine";
+import type { SecurityTestResult } from "@api-lab/security-engine";
 
 export interface RunnableRequest {
   id: string;
@@ -158,4 +159,73 @@ export function summarizeRunnerContract(state: RunnerState): RunnerContractSumma
   }
 
   return { passed, failed, warnings, validated };
+}
+
+/**
+ * Per-category result counts for the Runner (Milestone 12, spec §22, §32).
+ *
+ * Before Milestone 12 the Runner reported one pass/fail total and a separate
+ * contract block. With security and negative tests able to execute as part of
+ * a collection run, a single total stops meaning anything: "34 passed, 6
+ * failed" cannot tell a reader whether the six were broken assertions, broken
+ * contracts, or an endpoint that accepted a request with no credential —
+ * three findings with three different owners and three different urgencies.
+ *
+ * So every category is counted separately and displayed separately. They are
+ * never summed into a headline number, because the sum would be the least
+ * informative figure available.
+ */
+export interface RunnerCategoryCounts {
+  total: number;
+  passed: number;
+  failed: number;
+  warnings: number;
+}
+
+export type RunnerCategorySummary = Record<"functional" | "contract" | "security" | "negative", RunnerCategoryCounts>;
+
+function emptyCounts(): RunnerCategoryCounts {
+  return { total: 0, passed: 0, failed: 0, warnings: 0 };
+}
+
+export function summarizeRunnerCategories(
+  state: RunnerState,
+  securityResults: SecurityTestResult[],
+): RunnerCategorySummary {
+  const summary: RunnerCategorySummary = {
+    functional: emptyCounts(),
+    contract: emptyCounts(),
+    security: emptyCounts(),
+    negative: emptyCounts(),
+  };
+
+  for (const iteration of state.iterations) {
+    for (const item of iteration.items) {
+      // Functional: the request's own assertions. A contract failure is not
+      // counted as a functional failure here — it gets its own row.
+      summary.functional.total += 1;
+      if (item.status === "passed") summary.functional.passed += 1;
+      else if (item.status === "failed" || item.status === "error") summary.functional.failed += 1;
+
+      if (item.contractResult) {
+        summary.contract.total += 1;
+        if (item.contractResult.valid) summary.contract.passed += 1;
+        else summary.contract.failed += 1;
+        summary.contract.warnings += item.contractResult.warnings.length;
+      }
+    }
+  }
+
+  for (const result of securityResults) {
+    // The engine already tags every result with its category, so the split
+    // between "security" and "negative" comes from the generator's intent
+    // rather than from a guess made here.
+    const bucket = result.category === "security" ? summary.security : summary.negative;
+    bucket.total += 1;
+    if (result.status === "passed") bucket.passed += 1;
+    else if (result.status === "failed" || result.status === "error") bucket.failed += 1;
+    else if (result.status === "warning") bucket.warnings += 1;
+  }
+
+  return summary;
 }
