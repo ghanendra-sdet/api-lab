@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Hostile API",
+    "version": "1.0.0",
+    "description": "<script>window.__API_LAB_XSS_INFO = true;</script>"
+  },
+  "paths": {
+    "/__docs/hostile": {
+      "get": {
+        "tags": ["<script>window.__API_LAB_XSS_TAG = true;</script>"],
+        "summary": "An endpoint with a hostile summary <script>window.__API_LAB_XSS_SUMMARY = true;</script>",
+        "description": "<script>window.__API_LAB_XSS_DESCRIPTION = true;</script><img src=x onerror=\"window.__API_LAB_XSS_IMG = true\">",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "<script>window.__API_LAB_XSS_PARAM = true;</script>",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "<script>window.__API_LAB_XSS_RESPONSE = true;</script>",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Hostile" },
+                "example": { "note": "<script>window.__API_LAB_XSS_EXAMPLE = true;</script>" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Hostile": {
+        "type": "object",
+        "description": "<script>window.__API_LAB_XSS_SCHEMA = true;</script>",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "</script><script>window.__API_LAB_XSS_BREAKOUT = true;</script>"
+          }
+        }
+      }
+    }
+  }
+}

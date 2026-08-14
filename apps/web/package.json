@@ -17,6 +17,7 @@
     "@api-lab/auth-engine": "*",
     "@api-lab/collection-format": "*",
     "@api-lab/contract-engine": "*",
+    "@api-lab/documentation-engine": "*",
     "@api-lab/environment-engine": "*",
     "@api-lab/mock-engine": "*",
     "@api-lab/performance-engine": "*",
