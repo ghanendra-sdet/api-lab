@@ -26,6 +26,13 @@ import type { Extraction } from "@api-lab/runner-engine";
  * variable a later request can reference — see @api-lab/runner-engine.
  * Requests saved before Milestone 8 have no `extractions` field; schema.ts
  * defaults it to `[]` on load.
+ *
+ * `dependsOn` (Milestone B3.1) is an ordered list of other `SavedRequest`
+ * IDs this request declares as prerequisites — data model and graph
+ * validation only in this phase, see @api-lab/workspace-engine's
+ * `dependencyGraph.ts`. No request currently executes another request;
+ * that orchestration is a later B3 phase. Requests saved before B3.1 have
+ * no `dependsOn` field; schema.ts leaves it undefined on load.
  */
 export interface RequestConfig {
   method: HttpMethod;
@@ -40,6 +47,7 @@ export interface RequestConfig {
   extractions: Extraction[];
   preRequestScript?: string;
   postResponseScript?: string;
+  dependsOn?: string[];
 }
 
 export interface SavedRequest {

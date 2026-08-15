@@ -29,6 +29,7 @@ const requestConfigSchema = z.object({
   extractions: z.array(extractionSchema).default([]),
   preRequestScript: z.string().optional(),
   postResponseScript: z.string().optional(),
+  dependsOn: z.array(z.string()).optional(),
 });
 
 const savedRequestSchema = z.object({

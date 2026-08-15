@@ -216,3 +216,68 @@ describe("Milestone 8 backward compatibility: pre-extractions saved requests", (
     }
   });
 });
+
+describe("Milestone B3.1 backward compatibility: pre-dependsOn saved requests", () => {
+  it("loads a request saved before B3.1 (no dependsOn field) with dependsOn left undefined", () => {
+    const legacyPersisted = {
+      version: 1,
+      workspace: {
+        collections: [
+          {
+            id: "c1",
+            name: "Legacy Collection",
+            items: [
+              {
+                id: "r1",
+                type: "request",
+                name: "Old Request",
+                request: {
+                  method: "GET",
+                  url: "https://example.com",
+                  params: [],
+                  headers: [],
+                  auth: { type: "none" },
+                  bodyMode: "none",
+                  bodyRawFormat: "JSON",
+                  bodyRawContent: "",
+                  tests: [],
+                  extractions: [],
+                  // No `dependsOn` field — request saved before B3.1.
+                },
+                createdAt: "2024-01-01T00:00:00.000Z",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              },
+            ],
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const result = deserializeWorkspace(legacyPersisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const request = result.workspace.collections[0]!.items[0];
+      expect(request && "request" in request && request.request.dependsOn).toBeUndefined();
+    }
+  });
+
+  it("round-trips a request with dependsOn set", () => {
+    const { workspace: w1, collectionId } = createCollection(createEmptyWorkspace(), "API");
+    const { workspace: w2 } = createRequest(
+      w1,
+      { collectionId },
+      "Get Profile",
+      sampleRequestConfig({ dependsOn: ["login-request-id"] }),
+    );
+
+    const persisted = serializeWorkspace(w2);
+    const result = deserializeWorkspace(persisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const request = result.workspace.collections[0]!.items[0];
+      expect(request && "request" in request && request.request.dependsOn).toEqual(["login-request-id"]);
+    }
+  });
+});

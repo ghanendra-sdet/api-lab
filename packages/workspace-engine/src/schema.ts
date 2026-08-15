@@ -38,6 +38,10 @@ const requestConfigSchema = z.object({
   extractions: z.array(extractionSchema).default([]),
   preRequestScript: z.string().optional(),
   postResponseScript: z.string().optional(),
+  // Backward compatibility (Milestone B3.1): requests saved before this
+  // milestone have no `dependsOn` field at all — left undefined on load,
+  // matching the `preRequestScript`/`postResponseScript` pattern above.
+  dependsOn: z.array(z.string()).optional(),
 });
 
 const savedRequestSchema = z.object({

@@ -31,6 +31,10 @@ export interface RequestTabState {
   tests: Assertion[];
   /** Runtime-variable extractions — see @api-lab/runner-engine (Milestone 8). */
   extractions: Extraction[];
+  /** Other saved requests' IDs this request declares as prerequisites — data
+   * model only so far, no execution wired up yet (Milestone B3.1). See
+   * @api-lab/workspace-engine's dependencyGraph.ts. */
+  dependsOn: string[];
 
   /**
    * Set only when this tab is linked to a saved request — undefined means
