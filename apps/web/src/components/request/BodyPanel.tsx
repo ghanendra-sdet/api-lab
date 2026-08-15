@@ -72,10 +72,12 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
 
       {(tab.bodyMode === "form-data" || tab.bodyMode === "x-www-form-urlencoded") && (
         <p className="rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-          {BODY_MODE_LABELS[tab.bodyMode]} field editing ships alongside the request engine in
-          Milestone 2.
+          {BODY_MODE_LABELS[tab.bodyMode]} body editing is planned for a future release. As a
+          workaround, switch to <strong>raw</strong> mode and set the{" "}
+          <code className="font-mono">Content-Type</code> header manually.
         </p>
       )}
+
 
       {tab.bodyMode === "raw" && (
         <div className="min-h-[220px] flex-1 overflow-hidden rounded border border-neutral-200 dark:border-neutral-800">
