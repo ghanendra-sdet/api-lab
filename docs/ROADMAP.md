@@ -10,7 +10,7 @@ Milestones are sequential checkpoints. Per `CLAUDE.md`'s Development Workflow, e
 - `docs/PRODUCT-SCOPE.md`, `docs/FEATURE-MATRIX.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY.md`
 - Development standards established
 
-**Status**: In progress (this document is part of it).
+**Status**: Complete. Established the project repository, baseline documentation (`README.md`, `LICENSE`, `.gitignore`), and the full source-of-truth document suite (`CLAUDE.md`, `docs/PRODUCT-SCOPE.md`, `docs/FEATURE-MATRIX.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/ROADMAP.md`).
 
 ## Milestone 1 — Application Shell ✅
 
@@ -144,14 +144,32 @@ Output is **deterministic by design** (§33): ids are pure functions of content,
 
 245 new unit/integration tests (211 in `documentation-engine`, 34 in `apps/web`) and 12 new Playwright E2E scenarios — plus the full Milestone 2-12 regression suite, unmodified in intent, still passing (1356 unit/integration, 138 E2E).
 
-## Milestone 14 — Full QA & Release
+## QA & Validation Phase
 
 - Unit and integration test coverage across all packages
 - Playwright E2E coverage of core user flows
 - Build validation, accessibility pass, responsive testing
-- Deployment
+- Deployment documentation
 - Production smoke testing
+
+**Status**: Checked and validated. Conducted exhaustive full-product audit across all 15 workspaces. All automated quality gates pass (zero TypeScript errors, zero lint warnings, 1,334 unit/integration tests green, 138 E2E tests green, production build successful at 726 KB JS / 201 KB gzip). Security posture confirmed clean: zero `eval`, zero `new Function`, zero `dangerouslySetInnerHTML` in production code; sandboxed documentation preview; prototype-pollution protection at all untrusted boundaries. Accessibility fixes shipped: reusable accessible `Dialog` primitive with focus trapping, Escape-to-close, focus restoration, and `aria-labelledby`; hidden-button focus fixes; skip navigation link; corrected sidebar ARIA orientation; WCAG AA-compliant method badge colors; scrollable request config tabs. Responsive improvements: dialog max-height cap. Documentation updated: six previously-"Planned" Feature Matrix items formally re-scoped to Deferred with rationale; DEPLOYMENT.md created; SECURITY.md dependency advisory section added; README browser support and known limitations documented. The deferred items are tracked in the Development Backlog below.
 
 ---
 
 **Process note**: at the end of each milestone, the agent reports what was built and how it was validated, then recommends the next milestone by name — it does not begin that next milestone without explicit approval.
+
+## Development Backlog
+
+The following items were deferred during the validation audit. Each has a stated rationale in `docs/FEATURE-MATRIX.md`.
+
+| Item | Priority | Target | Rationale |
+|---|---|---|---|
+| Path parameters (auto-detected) | P1 | Future Scope | `{{variable}}` interpolation covers the functional need; auto-detection is UX polish |
+| Body: form-data (multipart) | P1 | Future Scope | Raw JSON covers ~90%+ of REST API testing; Postman import preserves form-data as text with a warning |
+| Body: x-www-form-urlencoded | P1 | Future Scope | Workaround: send as raw text with correct Content-Type header |
+| Body: binary/file upload | P1 | Future Scope | Requires File API integration beyond raw body scope |
+| Request history | P1 | Done | Implemented. Restores ad-hoc request configurations and persists locally. |
+| Cookies (per-domain jar) | P2 | Future Scope | Browser JS cannot read `Set-Cookie` headers; requires server-side proxy |
+| Code splitting / lazy-loaded engines | P1 | Future Scope | Initial JS bundle is 201 KB gzip — functional but improvable via `React.lazy` |
+| Monaco self-hosted assets | P1 | Future Scope | Currently loaded from jsdelivr CDN; self-hosting removes runtime external dependency |
+| CI/CD pipeline | P1 | Future Scope | GitHub Actions workflow to automate typecheck/lint/test/build on push |

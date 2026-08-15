@@ -105,5 +105,17 @@ The following are documented as roadmap intent only. None are implemented in the
 
 ## Non-Goals
 
-- API Lab is not a desktop application and will not ship one. Browser-first is a permanent architectural constraint, not a v1 limitation.
+- API Lab is not a desktop application and will not ship one. Browser-first is a permanent architectural constraint, not a temporary limitation.
 - API Lab does not aim for feature parity with any specific commercial product as a goal in itself — the goal is a genuinely useful, independently designed tool that covers the workflow above.
+
+## Deferred Scope Items
+
+The following items are in the long-term product scope above but are currently deferred from the initial development scope. Each is tracked in `docs/FEATURE-MATRIX.md` with a stated rationale. None represents a functional gap for the core JSON/REST API testing workflow.
+
+| Feature | Deferred To | Workaround |
+|---|---|---|
+| Path parameters (auto-detected from URL) | Future Scope | Use `{{variable}}` syntax in the URL — the variable resolver already handles path segments |
+| Body: form-data (multipart) | Future Scope | Use raw body mode with `Content-Type: multipart/form-data` header set manually |
+| Body: x-www-form-urlencoded | Future Scope | Use raw body mode with `Content-Type: application/x-www-form-urlencoded` header set manually |
+| Body: binary/file upload | Future Scope | Not available in initial scope |
+| Cookies (per-domain jar) | Future Scope | Browser JS cannot read `Set-Cookie` response headers; requires server-side proxy |

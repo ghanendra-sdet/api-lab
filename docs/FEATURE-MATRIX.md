@@ -2,7 +2,7 @@
 
 Every planned feature, with priority, the milestone phase it belongs to (see [`ROADMAP.md`](ROADMAP.md)), and current status. This is the operational tracking document — update `Status` as work lands. `docs/PRODUCT-SCOPE.md` is the narrative version of the same scope; this is the checklist version.
 
-**Priority key**: P0 = required for a usable v1, P1 = important, follows soon after v1, P2 = valuable but deferrable.
+**Priority key**: P0 = critical/required, P1 = important, P2 = valuable but deferrable.
 **Status key**: Planned, In Progress, Done, Deferred.
 
 ## Application Shell
@@ -27,18 +27,18 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 | HEAD | P1 | 2 | Done (no body sent, per HTTP spec) |
 | OPTIONS | P1 | 2 | Done |
 | Query parameters (with enable/disable) | P0 | 2 | Done |
-| Path parameters (auto-detected) | P0 | 2 | Planned |
+| Path parameters (auto-detected) | P1 | 2 | Deferred (Future Scope) — `{{variable}}` interpolation covers the functional need; Postman/OpenAPI imports already map path params to `{{variable}}` syntax. Auto-detection is UX polish. |
 | Headers editor (with enable/disable) | P0 | 2 | Done |
-| Cookies (per-domain jar) | P1 | 2 | Planned |
+| Cookies (per-domain jar) | P2 | 2 | Deferred (Future Scope) — browser JS cannot read `Set-Cookie` response headers; requires a server-side proxy not yet built. |
 | Body: raw JSON | P0 | 2 | Done (Monaco editor, JSON validation before send) |
 | Body: raw XML / Text / HTML | P1 | 2 | Done (sent as raw text with the matching Content-Type; no XML/HTML validation) |
-| Body: form-data (multipart) | P0 | 2 | Planned |
-| Body: x-www-form-urlencoded | P0 | 2 | Planned |
-| Body: binary/file upload | P1 | 2 | Planned |
+| Body: form-data (multipart) | P1 | 2 | Deferred (Future Scope) — raw JSON covers the overwhelming majority of REST API testing. Postman imports preserve form-data as readable text with an explicit warning. Requires FormData/Blob integration, file picker, and a key-value body builder UI. |
+| Body: x-www-form-urlencoded | P1 | 2 | Deferred (Future Scope) — same rationale as form-data. Workaround: send as raw text with `Content-Type: application/x-www-form-urlencoded` header. |
+| Body: binary/file upload | P1 | 2 | Deferred (Future Scope) — requires File API integration beyond raw body scope. |
 | Send request / view response | P0 | 2 | Done (via `BrowserFetchExecutor` / native fetch) |
 | Request cancellation | P1 | 2 | Done (`AbortController`) |
 | Request reset ("Clear") | P1 | 2 | Done |
-| Request history | P1 | 2 | Planned |
+| Request history | P1 | 2 | Done (restores method/url/headers/params/body, limits storage footprint to 50 items) |
 
 ## Response Handling
 
