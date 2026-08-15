@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import { VariableEditor } from "./VariableEditor";
+import { Dialog } from "../common/Dialog";
 
 interface EnvironmentManagerProps {
   onClose: () => void;
@@ -52,16 +53,15 @@ export function EnvironmentManager({ onClose }: EnvironmentManagerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Manage environments"
-        className="relative flex h-[32rem] w-[42rem] max-w-[92vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={onClose}
+      ariaLabel="Manage environments"
+      titleId="env-manager-title"
+      className="w-[42rem] max-w-[92vw]"
+    >
+      <div className="relative flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Environments</h2>
+          <h2 id="env-manager-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Environments</h2>
           <button
             type="button"
             onClick={onClose}
@@ -125,7 +125,7 @@ export function EnvironmentManager({ onClose }: EnvironmentManagerProps) {
                     >
                       {env.name}
                     </button>
-                    <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100">
+                    <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
                       <button
                         type="button"
                         onClick={() => duplicateEnvironment(env.id)}
@@ -174,6 +174,6 @@ export function EnvironmentManager({ onClose }: EnvironmentManagerProps) {
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

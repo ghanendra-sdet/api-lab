@@ -13,6 +13,7 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import { getContractModel, useContractStore } from "../../store/useContractStore";
 import { collectionToDriftEndpoints } from "../../lib/contractAdapt";
+import { Dialog } from "../common/Dialog";
 
 type ManagerTab = "specifications" | "drift" | "coverage" | "report";
 
@@ -122,16 +123,15 @@ export function ContractManager({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Contract"
-        className="relative flex h-[38rem] w-[46rem] max-w-[94vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={onClose}
+      ariaLabel="Manage contract"
+      titleId="contract-manager-title"
+      className="w-[46rem] max-w-[94vw]"
+    >
+      <div className="relative flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">API Contract Testing</h2>
+          <h2 id="contract-manager-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">API Contract Testing</h2>
           <button
             type="button"
             onClick={onClose}
@@ -430,6 +430,6 @@ export function ContractManager({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

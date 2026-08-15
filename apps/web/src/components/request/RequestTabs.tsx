@@ -54,7 +54,7 @@ export function RequestTabs() {
               type="button"
               onClick={() => handleClose(tab.id, tab)}
               aria-label={`Close ${tab.name} tab`}
-              className="rounded px-1 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 group-hover:opacity-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="rounded px-1 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
             >
               ×
             </button>

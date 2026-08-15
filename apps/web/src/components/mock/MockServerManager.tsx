@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMockStore } from "../../store/useMockStore";
 import { RouteEditor } from "./RouteEditor";
+import { Dialog } from "../common/Dialog";
 
 interface MockServerManagerProps {
   onClose: () => void;
@@ -52,16 +53,15 @@ export function MockServerManager({ onClose }: MockServerManagerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Mock Server"
-        className="relative flex h-[36rem] w-[52rem] max-w-[95vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={onClose}
+      ariaLabel="Mock Server"
+      titleId="mock-manager-title"
+      className="w-[52rem] max-w-[95vw]"
+    >
+      <div className="relative flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Mock Server</h2>
+          <h2 id="mock-manager-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Mock Server</h2>
           <button
             type="button"
             onClick={onClose}
@@ -212,6 +212,6 @@ export function MockServerManager({ onClose }: MockServerManagerProps) {
           </div>
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -17,6 +17,7 @@ import { useDocumentationStore } from "../../store/useDocumentationStore";
 import { collectionToDocSource } from "../../lib/documentationAdapt";
 import { collectionToDriftEndpoints } from "../../lib/contractAdapt";
 import { DocumentationPreview } from "./DocumentationPreview";
+import { Dialog } from "../common/Dialog";
 
 /**
  * The Documentation workspace (spec §32).
@@ -172,16 +173,15 @@ export function DocumentationManager({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Documentation"
-        className="relative flex h-[40rem] w-[64rem] max-w-[95vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={onClose}
+      ariaLabel="API Documentation"
+      titleId="doc-manager-title"
+      className="w-[64rem] max-w-[95vw]"
+    >
+      <div className="relative flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+          <h2 id="doc-manager-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
             API Documentation
           </h2>
           <button
@@ -447,6 +447,6 @@ export function DocumentationManager({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

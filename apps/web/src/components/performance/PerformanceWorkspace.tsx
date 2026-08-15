@@ -21,6 +21,7 @@ import { usePerfStore } from "../../store/usePerfStore";
 import { buildPerfSpecs, targetUrls } from "../../lib/perfSpecs";
 import { flattenCollectionRequests, type RunnableRequest } from "../../lib/runner";
 import { PerfCharts } from "./PerfCharts";
+import { Dialog } from "../common/Dialog";
 
 function formatNumber(value: number, digits = 0): string {
   return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -440,16 +441,14 @@ export function PerformanceWorkspace() {
 
         {/* ---- Production warning ---- */}
         {pendingWarning && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" />
-            <div
-              role="alertdialog"
-              aria-modal="true"
-              aria-label="Confirm performance test"
-              data-testid="perf-production-warning"
-              className="relative w-[28rem] max-w-[92vw] rounded-md bg-white p-4 shadow-lg dark:bg-neutral-900"
-            >
-              <h2 className="mb-2 text-sm font-semibold">This test targets a non-local system</h2>
+          <Dialog
+            onClose={() => setPendingWarning(null)}
+            titleId="perf-confirm-title"
+            className="w-[28rem] max-w-[92vw] p-4"
+            role="alertdialog"
+          >
+            <div data-testid="perf-production-warning">
+              <h2 id="perf-confirm-title" className="mb-2 text-sm font-semibold">This test targets a non-local system</h2>
               <p className="mb-3 text-xs leading-relaxed text-neutral-600 dark:text-neutral-300">
                 Performance tests can generate significant traffic against{" "}
                 <strong className="font-mono">{pendingWarning.hosts.join(", ")}</strong>. Only test systems you are
@@ -472,7 +471,7 @@ export function PerformanceWorkspace() {
                 </button>
               </div>
             </div>
-          </div>
+          </Dialog>
         )}
 
         {/* ---- Live metrics ---- */}

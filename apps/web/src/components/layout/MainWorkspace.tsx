@@ -16,7 +16,7 @@ export function MainWorkspace() {
   if (activeView === "home") return <WorkspaceHome />;
 
   return (
-    <main className="flex min-w-0 flex-1 overflow-hidden" aria-label="Request workspace">
+    <main id="main-content" className="flex min-w-0 flex-1 overflow-hidden" aria-label="Request workspace">
       <RequestWorkspace />
     </main>
   );

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { parseImportFile, type NormalizedImport, type ParseResult } from "@api-lab/collection-format";
 import { MAX_IMPORT_FILE_SIZE_BYTES } from "@api-lab/collection-format";
 import { useAppStore } from "../../store/useAppStore";
+import { Dialog } from "../common/Dialog";
 
 interface ImportDialogProps {
   onClose: () => void;
@@ -58,16 +59,13 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Import"
-        className="relative w-[30rem] max-w-[92vw] rounded-md bg-white p-4 shadow-lg dark:bg-neutral-900"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Import</h2>
+    <Dialog
+      onClose={onClose}
+      titleId="import-dialog-title"
+      className="w-[30rem] max-w-[92vw] p-4"
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h2 id="import-dialog-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Import</h2>
           <button
             type="button"
             onClick={onClose}
@@ -134,8 +132,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

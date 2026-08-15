@@ -2,15 +2,10 @@ import { useMemo, useRef, useState } from "react";
 import type { Collection } from "@api-lab/workspace-engine";
 import { parseDataset } from "@api-lab/runner-engine";
 import { useAppStore } from "../../store/useAppStore";
-import {
-  flattenCollectionRequests,
-  summarizeRunner,
-  summarizeRunnerContract,
-  summarizeRunnerCategories,
-  type RunnerItemStatus,
-} from "../../lib/runner";
+import { flattenCollectionRequests, summarizeRunner, summarizeRunnerContract, summarizeRunnerCategories, type RunnerItemStatus } from "../../lib/runner";
 import { ContractViolationList } from "../contract/ContractViolationList";
 import { findSpecificationForCollection, useContractStore } from "../../store/useContractStore";
+import { Dialog } from "../common/Dialog";
 
 interface RunnerDialogProps {
   collection: Collection;
@@ -114,16 +109,15 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={handleClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Collection Runner"
-        className="relative flex h-[36rem] w-[36rem] max-w-[92vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={handleClose}
+      ariaLabel="Collection Runner"
+      titleId="runner-dialog-title"
+      className="w-[36rem] max-w-[92vw] p-4"
+    >
+      <div className="relative flex flex-col h-full min-h-0">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+          <h2 id="runner-dialog-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
             Run Collection — {collection.name}
           </h2>
           <button
@@ -268,7 +262,11 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
 
           {runnerState.status !== "idle" && (
             <div>
-              <div className="mb-3 rounded border border-neutral-200 p-2 text-sm dark:border-neutral-800">
+              <div
+                role="status"
+                aria-live="polite"
+                className="mb-3 rounded border border-neutral-200 p-2 text-sm dark:border-neutral-800"
+              >
                 <p className="font-medium text-neutral-800 dark:text-neutral-100">
                   {runnerState.status === "running" ? "Running…" : runnerState.status === "cancelled" ? "Cancelled" : "Run complete"}
                 </p>
@@ -435,6 +433,6 @@ export function RunnerDialog({ collection, onClose }: RunnerDialogProps) {
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

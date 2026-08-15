@@ -79,7 +79,7 @@ export function Sidebar() {
         </aside>
         <div
           role="slider"
-          aria-orientation="vertical"
+          aria-orientation="horizontal"
           aria-label="Resize sidebar"
           aria-valuemin={MIN_WIDTH}
           aria-valuemax={MAX_WIDTH}

@@ -18,6 +18,7 @@ import { useSecurityStore } from "../../store/useSecurityStore";
 import { flattenCollectionRequests } from "../../lib/runner";
 import { matchOperation, resolveSecurityRequest } from "../../lib/securityAdapt";
 import { browserSecurityExecutor } from "../../lib/securityRun";
+import { Dialog } from "../common/Dialog";
 
 type ManagerTab = "generate" | "preview" | "results" | "report";
 
@@ -222,16 +223,15 @@ export function SecurityManager({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button type="button" aria-label="Close dialog" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Security"
-        className="relative flex h-[38rem] w-[50rem] max-w-[95vw] flex-col rounded-md bg-white shadow-lg dark:bg-neutral-900"
-      >
+    <Dialog
+      onClose={onClose}
+      ariaLabel="Security testing"
+      titleId="security-manager-title"
+      className="w-[50rem] max-w-[95vw]"
+    >
+      <div className="relative flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Security / Negative Testing</h2>
+          <h2 id="security-manager-title" className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Security / Negative Testing</h2>
           <button
             type="button"
             onClick={onClose}
@@ -503,7 +503,11 @@ export function SecurityManager({ onClose }: { onClose: () => void }) {
           {tab === "results" && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <p className="text-sm text-neutral-700 dark:text-neutral-200">
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="text-sm text-neutral-700 dark:text-neutral-200"
+                >
                   {runStatus === "running"
                     ? `Running ${progress.completed} / ${progress.total}…`
                     : `Run ${runStatus} — ${summary.passed} passed, ${summary.failed} failed, ${summary.warnings} warnings, ${summary.errors} errors, ${summary.skipped} skipped`}
@@ -612,14 +616,13 @@ export function SecurityManager({ onClose }: { onClose: () => void }) {
 
       {/* ---------------- Target confirmation (spec §30) ---------------- */}
       {pendingConfirmation !== null && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Confirm target"
-            className="w-[28rem] max-w-[90vw] rounded-md bg-white p-4 shadow-lg dark:bg-neutral-900"
-          >
-            <h3 className="mb-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">Confirm non-local target</h3>
+        <Dialog
+          onClose={() => setPendingConfirmation(null)}
+          ariaLabel="Confirm target"
+          titleId="security-confirm-title"
+          className="w-[28rem] max-w-[90vw] p-6"
+        >
+          <h3 id="security-confirm-title" className="mb-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">Confirm non-local target</h3>
             <p className="mb-2 text-sm text-neutral-700 dark:text-neutral-300">
               This run will send {enabledTests.length} generated request(s) to:
             </p>
@@ -648,9 +651,8 @@ export function SecurityManager({ onClose }: { onClose: () => void }) {
                 Confirm and run
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
-    </div>
+    </Dialog>
   );
 }
