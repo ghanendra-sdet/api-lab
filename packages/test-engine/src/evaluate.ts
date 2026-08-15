@@ -142,8 +142,19 @@ export function evaluateAssertion(assertion: Assertion, response: ApiResponseRes
           return result(assertion, !pathResult.found, pathResult.found ? "(present)" : "(missing)", "does not exist");
         }
         if (!pathResult.found) return result(assertion, false, "(missing)", assertion.expected);
-        const actualStr = jsonValueToString(pathResult.value);
-        const passed = assertion.operator === "contains" ? actualStr.includes(assertion.expected) : actualStr === assertion.expected;
+        const val = pathResult.value;
+        const actualStr = jsonValueToString(val);
+        let passed = false;
+        if (typeof val === "number" && ["greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual", "equals", "notEquals"].includes(assertion.operator)) {
+          const expectedNum = Number(assertion.expected);
+          if (!Number.isNaN(expectedNum)) {
+            passed = compareNumeric(val, assertion.operator, expectedNum);
+          } else {
+            passed = compareString(actualStr, assertion.operator, assertion.expected);
+          }
+        } else {
+          passed = compareString(actualStr, assertion.operator, assertion.expected);
+        }
         return result(assertion, passed, actualStr, assertion.expected);
       }
 

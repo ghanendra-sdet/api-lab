@@ -68,9 +68,9 @@ export interface TestResult {
 export const OPERATORS_BY_TARGET: Record<AssertionTarget, AssertionOperator[]> = {
   status: ["equals", "notEquals", "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual"],
   statusRange: ["equals"],
-  header: ["exists", "notExists", "equals", "contains"],
-  body: ["contains", "notContains", "equals", "exists", "notExists", "matches"],
-  json: ["exists", "notExists", "equals", "contains"],
-  responseTime: ["lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual"],
-  responseSize: ["equals", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual"],
+  header: ["exists", "notExists", "equals", "notEquals", "contains", "notContains"],
+  body: ["contains", "notContains", "equals", "notEquals", "exists", "notExists", "matches"],
+  json: ["exists", "notExists", "equals", "notEquals", "contains", "notContains", "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual"],
+  responseTime: ["equals", "notEquals", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual"],
+  responseSize: ["equals", "notEquals", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual"],
 };

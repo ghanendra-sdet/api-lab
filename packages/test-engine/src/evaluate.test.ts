@@ -212,6 +212,50 @@ describe("evaluateAssertion — responseSize", () => {
     );
     expect(result.error).toBeDefined();
   });
+
+  it("supports notEquals and boundary conditions for responseSize", () => {
+    expect(evaluateAssertion(assertion({ target: "responseSize", operator: "notEquals", expected: "100" }), response({ size: 60 })).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "responseSize", operator: "greaterThanOrEqual", expected: "60" }), response({ size: 60 })).passed).toBe(true);
+  });
+});
+
+describe("evaluateAssertion — extra operators and boundary checks", () => {
+  it("supports notEquals and notContains for headers", () => {
+    expect(evaluateAssertion(assertion({ target: "header", operator: "notEquals", key: "content-type", expected: "text/html" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "header", operator: "notContains", key: "content-type", expected: "xml" }), response()).passed).toBe(true);
+  });
+
+  it("supports notEquals, notContains, and numeric comparisons for json path values", () => {
+    expect(evaluateAssertion(assertion({ target: "json", operator: "notEquals", key: "$.id", expected: "999" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "json", operator: "notContains", key: "$.user.name", expected: "Bob" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "json", operator: "greaterThan", key: "$.id", expected: "100" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "json", operator: "lessThan", key: "$.id", expected: "200" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "json", operator: "greaterThanOrEqual", key: "$.id", expected: "123" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "json", operator: "lessThanOrEqual", key: "$.id", expected: "123" }), response()).passed).toBe(true);
+  });
+
+  it("handles type mismatch in numeric json comparisons gracefully", () => {
+    const result = evaluateAssertion(assertion({ target: "json", operator: "greaterThan", key: "$.user.name", expected: "100" }), response());
+    expect(result.passed).toBe(false);
+  });
+
+  it("checks body equals, notEquals, and regex matches", () => {
+    expect(evaluateAssertion(assertion({ target: "body", operator: "equals", expected: '{"id":123,"user":{"name":"Ada"},"items":[{"id":1},{"id":2}]}' }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "body", operator: "notEquals", expected: "empty" }), response()).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "body", operator: "matches", expected: "Ada" }), response()).passed).toBe(true);
+  });
+
+  it("handles invalid regex in matches safely", () => {
+    const result = evaluateAssertion(assertion({ target: "body", operator: "matches", expected: "[" }), response());
+    expect(result.passed).toBe(false);
+  });
+
+  it("supports greaterThan, equals, notEquals and boundary conditions for responseTime", () => {
+    expect(evaluateAssertion(assertion({ target: "responseTime", operator: "greaterThan", expected: "100" }), response({ duration: 150 })).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "responseTime", operator: "equals", expected: "150" }), response({ duration: 150 })).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "responseTime", operator: "notEquals", expected: "200" }), response({ duration: 150 })).passed).toBe(true);
+    expect(evaluateAssertion(assertion({ target: "responseTime", operator: "lessThanOrEqual", expected: "150" }), response({ duration: 150 })).passed).toBe(true);
+  });
 });
 
 describe("evaluateAssertions", () => {
