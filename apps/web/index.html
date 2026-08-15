@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="API Lab — a free, open-source, browser-first API testing platform. Build requests, manage collections, run tests, mock servers, performance testing, contract validation, and more."
+    />
+    <!--
+      Content Security Policy
+      - script-src: 'self' + 'unsafe-inline' (required for documentation search script inside srcDoc iframe) + jsdelivr (Monaco CDN assets) + blob: (Web Workers)
+      - style-src:  'unsafe-inline' required for React runtime styles and Monaco
+      - worker-src: blob: required for the ReDoS-screening Web Worker
+      - frame-src:  blob: required for the documentation preview iframe (srcDoc)
+      - connect-src: localhost:* for mock-server (4010) and perf-worker (4020) admin APIs
+      - No unsafe-eval: confirmed zero eval()/new Function() in production code
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src 'self' 'self' blob:; connect-src 'self' http://localhost:* https://cdn.jsdelivr.net; img-src 'self' data:;"
+    />
     <title>API Lab</title>
   </head>
   <body>

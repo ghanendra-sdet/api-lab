@@ -301,4 +301,22 @@ Every limit degrades to a **truncation with a recorded warning**, never to a thr
 
 ## Review Cadence
 
-This document is revisited whenever script execution is next considered (before any `script-engine` implementation begins — see the Script Execution Sandbox section's current-state note) and again at the dedicated Security Hardening milestone, and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.
+This document is revisited whenever script execution is next considered (before any `script-engine` implementation begins — see the Script Execution Sandbox section's current-state note) and updated whenever a concrete sandboxing or SSRF-prevention mechanism is chosen, so the documented model always matches the implemented one.
+
+## Dependency Advisories
+
+`npm audit` reports 7 vulnerability advisories. The impact assessment for each is recorded here for transparency.
+
+| Package | Advisory | Severity | Impact on API Lab |
+|---|---|---|---|
+| `dompurify` (transitive via `monaco-editor`) | Multiple low/moderate advisories (mXSS, prototype pollution, Trusted Types bypass) | Moderate (4 findings) / Low (1 direct effect) | API Lab does not call `DOMPurify` directly anywhere. Monaco uses it internally to sanitize its own in-editor tooltip/hover HTML. API Lab never passes untrusted user content to Monaco for HTML rendering — only code strings for syntax highlighting. **Not exploitable through API Lab's usage.** |
+| `esbuild` (transitive via `vite`) | Host header validation vulnerability allowing requests to dev server | Moderate | Affects local development only (`esbuild` dev server). Not present in the production bundle or static build output. **Not present in production deployments.** |
+| `vite` | Path traversal in optimized-deps `.map` handling and `server.fs.deny` bypass | High | Affects the Vite development server only (`npm run dev`). Not present in the production bundle or static build output. **Not present in production deployments.** |
+| `vitest` | Arbitrary file read/execute when Vitest UI server is listening | Critical | Affects development and test execution only, specifically when running Vitest with UI enabled. Not present in the production bundle, mock server process, or client runtime. |
+| `@vitest/mocker` / `vite-node` | Affected transitively via `vite` | Moderate | Transitive dev-only dependency of `vitest`. Not present in production deployments. |
+
+### Resolution plan
+
+- **DOMPurify**: No action required. The advisory applies to Monaco's internal usage, which is outside API Lab's control. When Monaco is upgraded, the advisory will be re-evaluated.
+- **esbuild / vite / vitest**: Dev-only packages. Will be updated in subsequent dependency upgrade passes. None of these affect the production build/bundle.
+
