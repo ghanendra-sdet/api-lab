@@ -27,6 +27,8 @@ const requestConfigSchema = z.object({
   bodyRawContent: z.string(),
   tests: z.array(assertionSchema).default([]),
   extractions: z.array(extractionSchema).default([]),
+  preRequestScript: z.string().optional(),
+  postResponseScript: z.string().optional(),
 });
 
 const savedRequestSchema = z.object({

@@ -13,6 +13,8 @@ export function tabToRequestConfig(tab: RequestTabState): RequestConfig {
     bodyRawContent: tab.bodyRawContent,
     tests: tab.tests,
     extractions: tab.extractions,
+    preRequestScript: tab.preRequestScript || undefined,
+    postResponseScript: tab.postResponseScript || undefined,
   };
 }
 
@@ -28,6 +30,8 @@ export function requestConfigToTabFields(config: RequestConfig): Partial<Request
     bodyRawContent: config.bodyRawContent,
     tests: config.tests,
     extractions: config.extractions,
+    preRequestScript: config.preRequestScript ?? "",
+    postResponseScript: config.postResponseScript ?? "",
   };
 }
 

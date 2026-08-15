@@ -38,6 +38,8 @@ export interface RequestConfig {
   bodyRawContent: string;
   tests: Assertion[];
   extractions: Extraction[];
+  preRequestScript?: string;
+  postResponseScript?: string;
 }
 
 export interface SavedRequest {

@@ -12,6 +12,8 @@ export function sampleRequestConfig(overrides: Partial<RequestConfig> = {}): Req
     bodyRawContent: "",
     tests: [],
     extractions: [],
+    preRequestScript: "",
+    postResponseScript: "",
     ...overrides,
   };
 }

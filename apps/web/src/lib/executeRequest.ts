@@ -21,6 +21,7 @@ import type { KeyValueRow } from "@api-lab/shared";
 import { resolveAuthConfig } from "./authResolve";
 import { resolveAssertions } from "./resolveAssertions";
 import { buildContractRequestInput } from "./contractAdapt";
+import { runScript, type ScriptResult } from "@api-lab/script-engine";
 
 /** Shared, stateless HTTP transport — used by both the request-tab "Send"
  * path and the Collection Runner, so there is exactly one execution
@@ -44,6 +45,8 @@ export interface ExecuteRequestResult {
    * collapsed into an ordinary assertion failure (spec §29).
    */
   contractResult?: ContractValidationResult;
+  preRequestScriptResult?: ScriptResult;
+  postResponseScriptResult?: ScriptResult;
 }
 
 /**
@@ -196,7 +199,43 @@ export async function executeRequestConfig(
   signal?: AbortSignal,
   contractOptions?: ContractExecutionOptions,
 ): Promise<ExecuteRequestResult> {
-  const preparation = prepareRequest(requestId, requestName, config, scopes);
+  const currentRuntime = { ...(scopes.runtime ?? {}) };
+  let preRequestScriptResult: ScriptResult | undefined;
+
+  // 1. Run Pre-request Script
+  if (config.preRequestScript && config.preRequestScript.trim() !== "") {
+    const environmentVars = scopes.environment ? buildVariableContext(scopes.environment) : {};
+    const mergedVars = { ...environmentVars, ...currentRuntime, ...(scopes.iteration ?? {}) };
+
+    preRequestScriptResult = await runScript(config.preRequestScript, {
+      variables: mergedVars,
+      request: {
+        url: config.url,
+        method: config.method,
+        headers: config.headers.reduce((acc, row) => {
+          if (row.enabled) acc[row.key] = row.value;
+          return acc;
+        }, {} as Record<string, string>),
+        body: config.bodyRawContent
+      }
+    });
+
+    if (preRequestScriptResult.status === "success" && preRequestScriptResult.variables) {
+      for (const [key, value] of Object.entries(preRequestScriptResult.variables)) {
+        if (mergedVars[key] !== value) {
+          currentRuntime[key] = value;
+        }
+      }
+    } else if (preRequestScriptResult.status === "error" || preRequestScriptResult.status === "timeout") {
+      // Pre-request script failure stops execution
+      return { ok: true, preRequestScriptResult };
+    }
+  }
+
+  const preparation = prepareRequest(requestId, requestName, config, {
+    ...scopes,
+    runtime: currentRuntime
+  });
   if (!preparation.ok) return { ok: false, validationError: preparation.validationError };
 
   const { context, built, params: withAuthParams } = preparation.prepared;
@@ -228,17 +267,62 @@ export async function executeRequestConfig(
       // Spec §12: an invalid request fails *before* being sent. Reported as
       // an ordinary execution outcome carrying the contract result, so the
       // caller renders violations rather than a bare error string.
-      return { ok: true, contractResult: preflight };
+      return { ok: true, contractResult: preflight, preRequestScriptResult };
     }
   }
 
   const response = await executor.execute(built, { signal });
 
-  const resolvedAssertions = resolveAssertions(config.tests, context);
+  // 2. Run Post-response Script
+  let postResponseScriptResult: ScriptResult | undefined;
+  if (config.postResponseScript && config.postResponseScript.trim() !== "") {
+    const environmentVars = scopes.environment ? buildVariableContext(scopes.environment) : {};
+    const mergedVars = { ...environmentVars, ...currentRuntime, ...(scopes.iteration ?? {}) };
+
+    postResponseScriptResult = await runScript(config.postResponseScript, {
+      variables: mergedVars,
+      request: {
+        url: built.url,
+        method: built.method,
+        headers: built.headers,
+        body: built.body ? String(built.body) : undefined
+      },
+      response: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        body: response.body,
+        rawBody: response.rawBody,
+        duration: response.duration,
+        size: response.size ?? 0
+      }
+    });
+
+    if (postResponseScriptResult.status === "success" && postResponseScriptResult.variables) {
+      for (const [key, value] of Object.entries(postResponseScriptResult.variables)) {
+        if (mergedVars[key] !== value) {
+          currentRuntime[key] = value;
+        }
+      }
+    }
+  }
+
+  const finalContext = {
+    ...context,
+    ...currentRuntime
+  };
+
+  const resolvedAssertions = resolveAssertions(config.tests, finalContext);
   const assertionResults = evaluateAssertions(resolvedAssertions, response);
   const testResult = buildTestResult(requestId, requestName, response.duration, assertionResults, response.error ?? undefined);
 
   const { variables: extractedVariables, results: extractionResults } = extractAll(config.extractions, response);
+
+  // Merge script-extracted runtime variables into extractedVariables
+  const finalExtractedVariables = {
+    ...extractedVariables,
+    ...currentRuntime
+  };
 
   let contractResult: ContractValidationResult | undefined;
   if (contractOptions && contractRequestInput) {
@@ -252,5 +336,14 @@ export async function executeRequestConfig(
     );
   }
 
-  return { ok: true, response, testResult, extractedVariables, extractionResults, contractResult };
+  return {
+    ok: true,
+    response,
+    testResult,
+    extractedVariables: finalExtractedVariables,
+    extractionResults,
+    contractResult,
+    preRequestScriptResult,
+    postResponseScriptResult
+  };
 }

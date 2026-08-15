@@ -36,6 +36,8 @@ const requestConfigSchema = z.object({
   // Backward compatibility (Milestone 8): requests saved before this
   // milestone have no `extractions` field at all — default to none.
   extractions: z.array(extractionSchema).default([]),
+  preRequestScript: z.string().optional(),
+  postResponseScript: z.string().optional(),
 });
 
 const savedRequestSchema = z.object({

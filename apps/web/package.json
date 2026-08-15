@@ -24,6 +24,7 @@
     "@api-lab/request-engine": "*",
     "@api-lab/runner-engine": "*",
     "@api-lab/security-engine": "*",
+    "@api-lab/script-engine": "*",
     "@api-lab/shared": "*",
     "@api-lab/test-engine": "*",
     "@api-lab/workspace-engine": "*",

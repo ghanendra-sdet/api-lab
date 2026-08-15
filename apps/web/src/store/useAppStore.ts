@@ -51,6 +51,7 @@ import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
 import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
 import { executeRequestConfig, type ContractExecutionOptions } from "../lib/executeRequest";
+import type { ScriptResult } from "@api-lab/script-engine";
 import { findSpecificationForCollection, getContractModel, useContractStore } from "./useContractStore";
 import {
   flattenCollectionRequests,
@@ -247,6 +248,8 @@ interface AppState {
   requestStatus: Record<string, "idle" | "loading">;
   responses: Record<string, ApiResponseResult | undefined>;
   testResults: Record<string, TestResult | undefined>;
+  preRequestScriptResults: Record<string, ScriptResult | undefined>;
+  postResponseScriptResults: Record<string, ScriptResult | undefined>;
   extractionResults: Record<string, ExtractionResult[] | undefined>;
   sendErrors: Record<string, ValidationError | undefined>;
   abortControllers: Record<string, AbortController>;
@@ -695,6 +698,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   requestStatus: {},
   responses: {},
   testResults: {},
+  preRequestScriptResults: {},
+  postResponseScriptResults: {},
   extractionResults: {},
   tabRuntimeVariables: {},
   sendErrors: {},
@@ -755,12 +760,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
       }
 
-      // A blocked pre-flight (spec §12) returns a contract result with no
-      // response. Surface the violations without clearing the previous
-      // response, which was never replaced.
+      // A blocked pre-flight (spec §12) or pre-request script failure returns no response.
       if (!outcome.response) {
         return {
           contractResults: { ...s.contractResults, [tabId]: outcome.contractResult },
+          preRequestScriptResults: { ...s.preRequestScriptResults, [tabId]: outcome.preRequestScriptResult },
           requestStatus: { ...s.requestStatus, [tabId]: "idle" },
           abortControllers: remainingControllers,
         };
@@ -796,6 +800,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         responses: { ...s.responses, [tabId]: outcome.response },
         testResults: { ...s.testResults, [tabId]: outcome.testResult },
+        preRequestScriptResults: { ...s.preRequestScriptResults, [tabId]: outcome.preRequestScriptResult },
+        postResponseScriptResults: { ...s.postResponseScriptResults, [tabId]: outcome.postResponseScriptResult },
         extractionResults: { ...s.extractionResults, [tabId]: outcome.extractionResults },
         contractResults: { ...s.contractResults, [tabId]: outcome.contractResult },
         requestStatus: { ...s.requestStatus, [tabId]: "idle" },
@@ -826,6 +832,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         }),
         responses: { ...s.responses, [tabId]: undefined },
         testResults: { ...s.testResults, [tabId]: undefined },
+        preRequestScriptResults: { ...s.preRequestScriptResults, [tabId]: undefined },
+        postResponseScriptResults: { ...s.postResponseScriptResults, [tabId]: undefined },
         extractionResults: { ...s.extractionResults, [tabId]: undefined },
         contractResults: { ...s.contractResults, [tabId]: undefined },
         sendErrors: { ...s.sendErrors, [tabId]: undefined },
