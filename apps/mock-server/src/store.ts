@@ -91,4 +91,9 @@ export class RouteStore {
     }
     return false;
   }
+
+  clear(): void {
+    this.routes = [];
+    this.save();
+  }
 }

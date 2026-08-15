@@ -32,10 +32,7 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
-  const routes: Array<{ id: string }> = await (await fetch(`${baseUrl}/__mock/routes`)).json();
-  for (const route of routes) {
-    await fetch(`${baseUrl}/__mock/routes/${route.id}`, { method: "DELETE" });
-  }
+  await fetch(`${baseUrl}/__mock/routes`, { method: "DELETE" });
   await fetch(`${baseUrl}/__mock/logs`, { method: "DELETE" });
   await fetch(`${baseUrl}/__mock/lifecycle/start`, { method: "POST" });
 });
@@ -258,5 +255,19 @@ describe("mock server — admin API + real HTTP mock traffic", () => {
     const res = await fetch(`${baseUrl}/anything`, { method: "OPTIONS" });
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-origin")).toBeTruthy();
+  });
+
+  it("clears all routes via DELETE /__mock/routes", async () => {
+    await createRoute({ method: "GET", path: "/route1" });
+    await createRoute({ method: "POST", path: "/route2" });
+
+    const routesBefore = await (await fetch(`${baseUrl}/__mock/routes`)).json();
+    expect(routesBefore.length).toBe(2);
+
+    const clearRes = await fetch(`${baseUrl}/__mock/routes`, { method: "DELETE" });
+    expect(clearRes.status).toBe(200);
+
+    const routesAfter = await (await fetch(`${baseUrl}/__mock/routes`)).json();
+    expect(routesAfter.length).toBe(0);
   });
 });

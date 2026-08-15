@@ -53,6 +53,11 @@ test.describe("Mock Server & API Simulation", () => {
   // race against another test's concurrent route creation.
   test.describe.configure({ mode: "serial" });
 
+  test.beforeAll(async ({ request }) => {
+    await request.delete(`${MOCK_BASE}/__mock/routes`);
+    await request.delete(`${MOCK_BASE}/__mock/logs`);
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
@@ -78,11 +83,13 @@ test.describe("Mock Server & API Simulation", () => {
     await dialog.getByRole("button", { name: "+ New Route" }).click();
     await dialog.locator("#route-path").fill("/t3/session");
     await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
 
     // Add a second, Unauthorized scenario.
     await dialog.getByRole("button", { name: "+ Add Scenario" }).click();
     await dialog.locator("#scenario-preset").selectOption("401");
     await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
 
     await dialog.getByRole("button", { name: "Close mock server manager" }).click();
     await setUrl(page, `${MOCK_BASE}/t3/session`);

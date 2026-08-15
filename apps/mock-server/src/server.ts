@@ -171,6 +171,11 @@ export function buildMockServer(options: MockServerOptions): FastifyInstance {
     return reply.status(204).send();
   });
 
+  app.delete("/__mock/routes", async () => {
+    store.clear();
+    return { ok: true };
+  });
+
   app.get("/__mock/logs", async () => log.list());
   app.delete("/__mock/logs", async () => {
     log.clear();
