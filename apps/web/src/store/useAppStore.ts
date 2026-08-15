@@ -44,7 +44,7 @@ import type {
 import { createAssertion, type Assertion, type TestResult } from "@api-lab/test-engine";
 import { createExtraction, type Dataset, type Extraction, type ExtractionResult } from "@api-lab/runner-engine";
 import type { ContractValidationResult } from "@api-lab/contract-engine";
-import type { RequestTabState } from "../types";
+import type { RequestTabState, HistoryItem } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
@@ -70,6 +70,9 @@ import {
   saveEnvironmentsToStorage,
   saveTabsToStorage,
   saveWorkspaceToStorage,
+  loadHistoryFromStorage,
+  saveHistoryToStorage,
+  resetHistoryStorage,
 } from "../lib/persistence";
 
 function getPreferredTheme(): ThemeMode {
@@ -86,6 +89,7 @@ interface InitialState {
   environmentsLoadError: string | null;
   tabs: RequestTabState[];
   activeTabId: string;
+  history: HistoryItem[];
 }
 
 function loadInitialState(): InitialState {
@@ -103,6 +107,8 @@ function loadInitialState(): InitialState {
     environmentsResult.status === "ok" ? environmentsResult.data : createEmptyEnvironmentWorkspace();
   const environmentsLoadError = environmentsResult.status === "error" ? environmentsResult.detail : null;
 
+  const history = loadHistoryFromStorage();
+
   const persistedTabs = loadTabsFromStorage();
   if (persistedTabs) {
     return {
@@ -112,6 +118,7 @@ function loadInitialState(): InitialState {
       environmentsLoadError,
       tabs: persistedTabs.tabs,
       activeTabId: persistedTabs.activeTabId,
+      history,
     };
   }
 
@@ -123,6 +130,7 @@ function loadInitialState(): InitialState {
     environmentsLoadError,
     tabs: [tab],
     activeTabId: tab.id,
+    history,
   };
 }
 
@@ -198,6 +206,11 @@ interface AppState {
   openSavedRequest: (location: RequestLocation, requestId: string) => void;
   saveNewRequest: (tabId: string, location: RequestLocation, name: string) => void;
   saveTab: (tabId: string) => void;
+
+  // Request History
+  history: HistoryItem[];
+  clearHistory: () => void;
+  openHistoryItem: (item: HistoryItem) => void;
 
   // Active tab field updates
   setTabMethod: (tabId: string, method: HttpMethod) => void;
@@ -488,6 +501,35 @@ export const useAppStore = create<AppState>((set, get) => ({
   tabs: initial.tabs,
   activeTabId: initial.activeTabId,
 
+  history: initial.history,
+
+  clearHistory: () => {
+    resetHistoryStorage();
+    set({ history: [] });
+  },
+
+  openHistoryItem: (item) => {
+    let path = item.url;
+    try {
+      if (item.url.startsWith("http://") || item.url.startsWith("https://")) {
+        path = new URL(item.url).pathname;
+      } else {
+        path = new URL(item.url, "http://localhost").pathname;
+      }
+    } catch {
+      // Safe fallback
+    }
+    const tab = createEmptyTab({
+      name: `History: ${item.method} ${path}`.substring(0, 45),
+      ...requestConfigToTabFields(item.requestConfig),
+    });
+    set((s) => ({
+      activeView: "request",
+      tabs: [...s.tabs, tab],
+      activeTabId: tab.id,
+    }));
+  },
+
   openNewTab: () =>
     set((s) => {
       const tab = createEmptyTab();
@@ -728,6 +770,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { ...s.tabRuntimeVariables[tabId], ...outcome.extractedVariables }
         : s.tabRuntimeVariables[tabId];
 
+      // A null status means the executor never got a real HTTP response —
+      // cancellation (AbortError) and network/CORS failures both resolve
+      // this way (see BrowserFetchExecutor.errorResponse), rather than
+      // throwing. Recording those in history would be indistinguishable
+      // from a genuine completed request, so — matching the "never report
+      // cancellation as success" rule the Performance engine already
+      // follows — only a request that actually reached the server (any
+      // real status code, success or error) is added to history.
+      const history =
+        outcome.response.status !== null
+          ? [
+              {
+                id: createId("hist"),
+                method: tab.method,
+                url: tab.url,
+                timestamp: new Date().toISOString(),
+                status: outcome.response.status,
+                requestConfig: tabToRequestConfig(tab),
+              } satisfies HistoryItem,
+              ...s.history,
+            ].slice(0, 50)
+          : s.history;
+
       return {
         responses: { ...s.responses, [tabId]: outcome.response },
         testResults: { ...s.testResults, [tabId]: outcome.testResult },
@@ -736,6 +801,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         requestStatus: { ...s.requestStatus, [tabId]: "idle" },
         abortControllers: remainingControllers,
         tabRuntimeVariables: { ...s.tabRuntimeVariables, [tabId]: nextRuntimeVariables ?? {} },
+        history,
       };
     });
   },
@@ -1006,3 +1072,12 @@ useAppStore.subscribe((state) => {
     saveTabsToStorage({ tabs: state.tabs, activeTabId: state.activeTabId });
   }
 });
+
+let lastHistory = useAppStore.getState().history;
+useAppStore.subscribe((state) => {
+  if (state.history !== lastHistory) {
+    lastHistory = state.history;
+    saveHistoryToStorage(state.history);
+  }
+});
+

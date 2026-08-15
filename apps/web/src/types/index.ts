@@ -43,3 +43,14 @@ export interface RequestTabState {
   /** The request config as of the last open/save — used to compute dirty state. */
   savedSnapshot?: RequestConfig;
 }
+
+/** Represents an entry in the request execution history. */
+export interface HistoryItem {
+  id: string;
+  method: HttpMethod;
+  url: string;
+  timestamp: string; // ISO timestamp
+  status?: number; // Response status code if available
+  requestConfig: RequestConfig;
+}
+

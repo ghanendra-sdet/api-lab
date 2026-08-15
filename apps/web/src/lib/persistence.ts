@@ -4,8 +4,10 @@ import {
   serializeEnvironments,
   type EnvironmentWorkspace,
 } from "@api-lab/environment-engine";
-import type { RequestTabState } from "../types";
+import type { RequestTabState, HistoryItem } from "../types";
 import { debounce } from "./debounce";
+
+const HISTORY_KEY = "api-lab-request-history";
 
 const WORKSPACE_KEY = "api-lab-workspace";
 const TABS_KEY = "api-lab-tabs";
@@ -160,3 +162,50 @@ export function resetEnvironmentsStorage(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(ENVIRONMENTS_KEY);
 }
+
+// ---------------------------------------------------------------------------
+// Request History — session and execution convenience.
+// ---------------------------------------------------------------------------
+
+export function loadHistoryFromStorage(): HistoryItem[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(HISTORY_KEY);
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is HistoryItem => {
+        return (
+          typeof item === "object" &&
+          item !== null &&
+          typeof item.id === "string" &&
+          typeof item.method === "string" &&
+          typeof item.url === "string" &&
+          typeof item.timestamp === "string" &&
+          typeof item.requestConfig === "object" &&
+          item.requestConfig !== null
+        );
+      });
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHistoryNow(data: HistoryItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+  } catch {
+    // Non-fatal.
+  }
+}
+
+export const saveHistoryToStorage = debounce(writeHistoryNow, DEBOUNCE_MS);
+
+export function resetHistoryStorage(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(HISTORY_KEY);
+}
+
