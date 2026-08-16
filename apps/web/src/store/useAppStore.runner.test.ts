@@ -321,4 +321,76 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
     const state = useAppStore.getState();
     expect(state.runnerState.iterations[0]!.items[0]!.extractionResults?.[0]).toMatchObject({ ok: true, value: "abc" });
   });
+
+  it("runs dependency chains in Collection Runner with correct ordering, no duplicates, and runtime propagation", async () => {
+    const urlsCalled: string[] = [];
+    let bAuth = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init) => {
+        const u = url.toString();
+        urlsCalled.push(u);
+        if (u.includes("/login")) {
+          return new Response(JSON.stringify({ token: "runner-token-123" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (u.includes("/whoami")) {
+          const hdrs = init ? ((init as RequestInit).headers as Record<string, string>) : {};
+          bAuth = hdrs["Authorization"] || "";
+          return new Response("{}", { status: 200 });
+        }
+        return new Response("{}", { status: 200 });
+      })
+    );
+
+    const { createCollection, saveNewRequest, setTabUrl, activeTabId, addExtraction, updateExtraction, updateHeaderRow, addHeaderRow } = useAppStore.getState();
+    const collectionId = createCollection("Dependency Runner Collection");
+    
+    // Create A (Login)
+    setTabUrl(activeTabId, "https://example.com/login");
+    const extId = addExtraction(activeTabId);
+    updateExtraction(activeTabId, extId, { source: "json", path: "$.token", variable: "token" });
+    saveNewRequest(activeTabId, { collectionId }, "Login");
+
+    const collectionSnapshot = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
+    const loginId = collectionSnapshot.items.find(i => i.name === "Login")!.id;
+
+    // Create B (Whoami)
+    const freshTab = createEmptyTab();
+    useAppStore.setState({ tabs: [freshTab], activeTabId: freshTab.id });
+    setTabUrl(freshTab.id, "https://example.com/whoami");
+    addHeaderRow(freshTab.id);
+    const hdrId = useAppStore.getState().tabs[0]!.headers[0]!.id;
+    updateHeaderRow(freshTab.id, hdrId, { key: "Authorization", value: "Bearer {{token}}", enabled: true });
+    
+    // Set dependency
+    const workspace = useAppStore.getState().workspace;
+    const tabC = useAppStore.getState().tabs[0]!;
+    tabC.dependsOn = [loginId];
+    useAppStore.setState({ workspace });
+
+    saveNewRequest(tabC.id, { collectionId }, "Whoami");
+
+    const finalCol = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
+    const whoamiId = finalCol.items.find(i => i.name === "Whoami")!.id;
+
+    // Run the Collection Runner selecting ONLY "Whoami"
+    await useAppStore.getState().startRunner(collectionId, [whoamiId], null, true);
+
+    expect(urlsCalled).toEqual(["https://example.com/login", "https://example.com/whoami"]);
+    expect(bAuth).toBe("Bearer runner-token-123");
+
+    const state = useAppStore.getState();
+    expect(state.runnerState.status).toBe("completed");
+    
+    // Since only Whoami was explicitly requested, only Whoami is in the runner items,
+    // but the runner executed Login as a prerequisite behind the scenes
+    const runnerItems = state.runnerState.iterations[0]!.items;
+    expect(runnerItems).toHaveLength(1);
+    expect(runnerItems[0]!.requestId).toBe(whoamiId);
+    expect(runnerItems[0]!.status).toBe("skipped"); // no assertions
+  });
 });
+
