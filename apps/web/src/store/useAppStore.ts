@@ -227,6 +227,7 @@ interface AppState {
   // Active tab field updates
   setTabMethod: (tabId: string, method: HttpMethod) => void;
   setTabUrl: (tabId: string, url: string) => void;
+  setTabDependsOn: (tabId: string, dependsOn: string[]) => void;
   setActivePanel: (tabId: string, panel: RequestPanelId) => void;
 
   // Params / Headers row management
@@ -824,6 +825,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setTabMethod: (tabId, method) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { method }) })),
   setTabUrl: (tabId, url) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { url }) })),
+  setTabDependsOn: (tabId, dependsOn) => set((s) => ({ tabs: updateTab(s.tabs, tabId, { dependsOn }) })),
   setActivePanel: (tabId, activePanel) =>
     set((s) => ({ tabs: updateTab(s.tabs, tabId, { activePanel }) })),
 
