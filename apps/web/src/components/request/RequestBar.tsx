@@ -34,7 +34,12 @@ export function RequestBar({ tab }: RequestBarProps) {
 
   function handleSaveClick() {
     if (isLinked) {
-      saveTab(tab.id);
+      try {
+        saveTab(tab.id);
+      } catch (e) {
+        const error = e as Error;
+        window.alert(error.message);
+      }
     } else {
       setShowSaveDialog(true);
     }

@@ -320,8 +320,8 @@ export async function executeRequestConfig(
 
   // Merge script-extracted runtime variables into extractedVariables
   const finalExtractedVariables = {
-    ...extractedVariables,
-    ...currentRuntime
+    ...currentRuntime,
+    ...extractedVariables
   };
 
   let contractResult: ContractValidationResult | undefined;

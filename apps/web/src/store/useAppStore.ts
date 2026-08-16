@@ -19,8 +19,14 @@ import {
   renameFolder as wsRenameFolder,
   renameRequest as wsRenameRequest,
   updateRequestConfig as wsUpdateRequestConfig,
+  isFolder,
+  isRequest,
+  resolveDependencyOrder,
+  formatCircularDependencyChain,
   type RequestLocation,
   type Workspace,
+  type SavedRequest,
+  type RequestConfig,
 } from "@api-lab/workspace-engine";
 import {
   addVariable as envAddVariable,
@@ -50,7 +56,12 @@ import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
 import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConfig";
 import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
-import { executeRequestConfig, type ContractExecutionOptions } from "../lib/executeRequest";
+import {
+  executeRequestConfig,
+  type ContractExecutionOptions,
+  type ExecuteRequestResult,
+  type ExecutionScopes,
+} from "../lib/executeRequest";
 import type { ScriptResult } from "@api-lab/script-engine";
 import { findSpecificationForCollection, getContractModel, useContractStore } from "./useContractStore";
 import {
@@ -350,6 +361,206 @@ function buildContractOptions(
   };
 }
 
+function buildDependencyMap(workspace: Workspace): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const collection of workspace.collections) {
+    for (const item of collection.items) {
+      if (isFolder(item)) {
+        for (const req of item.items) {
+          map[req.id] = req.request.dependsOn || [];
+        }
+      } else if (isRequest(item)) {
+        map[item.id] = item.request.dependsOn || [];
+      }
+    }
+  }
+  return map;
+}
+
+function getRequestName(workspace: Workspace, id: string): string {
+  for (const collection of workspace.collections) {
+    for (const item of collection.items) {
+      if (isFolder(item)) {
+        for (const req of item.items) {
+          if (req.id === id) return req.name;
+        }
+      } else if (isRequest(item)) {
+        if (item.id === id) return item.name;
+      }
+    }
+  }
+  return id;
+}
+
+function validateWorkspaceDependencies(workspace: Workspace, changedRequestId: string): void {
+  const dependencyMap = buildDependencyMap(workspace);
+  const result = resolveDependencyOrder(changedRequestId, dependencyMap);
+  if (!result.ok) {
+    const error = result.error;
+    if (error.type === "self-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      throw new Error(`Request ${name} cannot depend on itself.`);
+    } else if (error.type === "duplicate-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      const duplicateName = getRequestName(workspace, error.duplicateId);
+      throw new Error(`Request ${name} contains duplicate dependency ${duplicateName}.`);
+    } else if (error.type === "missing-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      throw new Error(`Request ${name} depends on missing request ${error.missingId}.`);
+    } else if (error.type === "circular-dependency") {
+      const chainStr = formatCircularDependencyChain(
+        error.chain.map((id) => getRequestName(workspace, id))
+      );
+      throw new Error(`Circular dependency detected:\n${chainStr}`);
+    }
+  }
+}
+
+function findSavedRequest(workspace: Workspace, id: string): SavedRequest | undefined {
+  for (const collection of workspace.collections) {
+    for (const item of collection.items) {
+      if (isFolder(item)) {
+        for (const req of item.items) {
+          if (req.id === id) return req;
+        }
+      } else if (isRequest(item)) {
+        if (item.id === id) return item;
+      }
+    }
+  }
+  return undefined;
+}
+
+function isExecutionFailure(outcome: ExecuteRequestResult): boolean {
+  if (!outcome.ok) return true;
+  if (!outcome.response) return true;
+  if (outcome.testResult && (outcome.testResult.status === "failed" || outcome.testResult.status === "error")) {
+    return true;
+  }
+  if (outcome.contractResult && !outcome.contractResult.valid) {
+    return true;
+  }
+  return false;
+}
+
+function isPrerequisiteFailure(outcome: ExecuteRequestResult): boolean {
+  if (isExecutionFailure(outcome)) return true;
+  if (outcome.extractionResults && outcome.extractionResults.some((r) => !r.ok)) {
+    return true;
+  }
+  return false;
+}
+
+async function executeRequestWithDependencies(
+  targetId: string,
+  targetName: string,
+  targetConfig: RequestConfig,
+  scopes: ExecutionScopes,
+  signal: AbortSignal,
+  contractOptions: ContractExecutionOptions | undefined,
+  workspace: Workspace,
+  executed: Set<string>,
+  onStepStart?: (id: string, name: string) => void,
+  onStepEnd?: (id: string, name: string, outcome: ExecuteRequestResult) => void,
+): Promise<ExecuteRequestResult> {
+  const dependencyMap = buildDependencyMap(workspace);
+  dependencyMap[targetId] = targetConfig.dependsOn || [];
+
+  const resolution = resolveDependencyOrder(targetId, dependencyMap);
+  if (!resolution.ok) {
+    return {
+      ok: false,
+      validationError: { field: "variables", message: "Invalid dependency configuration." },
+    };
+  }
+
+  const currentRuntime = { ...(scopes.runtime ?? {}) };
+
+  for (const id of resolution.order) {
+    if (signal.aborted) {
+      return { ok: false, validationError: { field: "variables", message: "Execution cancelled." } };
+    }
+
+    if (executed.has(id)) {
+      continue;
+    }
+
+    const isTarget = id === targetId;
+    let name: string;
+    let config: RequestConfig;
+
+    if (isTarget) {
+      name = targetName;
+      config = targetConfig;
+    } else {
+      const saved = findSavedRequest(workspace, id);
+      if (!saved) {
+        return {
+          ok: false,
+          validationError: { field: "variables", message: `Prerequisite request ID ${id} not found in workspace.` },
+        };
+      }
+      name = saved.name;
+      config = saved.request;
+    }
+
+    if (onStepStart) {
+      onStepStart(id, name);
+    }
+
+    const outcome = await executeRequestConfig(
+      id,
+      name,
+      config,
+      { ...scopes, runtime: currentRuntime },
+      signal,
+      isTarget ? contractOptions : undefined,
+    );
+
+    if (onStepEnd) {
+      onStepEnd(id, name, outcome);
+    }
+
+    executed.add(id);
+
+    if (outcome.ok && outcome.extractedVariables) {
+      Object.assign(currentRuntime, outcome.extractedVariables);
+    }
+
+    const isStepFailed = isTarget ? isExecutionFailure(outcome) : isPrerequisiteFailure(outcome);
+    if (isStepFailed) {
+      if (isTarget) {
+        return outcome;
+      } else {
+        let errMsg = `Prerequisite request '${name}' failed.`;
+        if (!outcome.ok && outcome.validationError) {
+          errMsg = `Prerequisite request '${name}' failed: ${outcome.validationError.message}`;
+        } else if (outcome.extractionResults && outcome.extractionResults.some((r) => !r.ok)) {
+          const failed = outcome.extractionResults.find((r) => !r.ok)!;
+          errMsg = `Prerequisite request '${name}' failed extraction: ${failed.error}`;
+        } else if (outcome.testResult && (outcome.testResult.status === "failed" || outcome.testResult.status === "error")) {
+          errMsg = `Prerequisite request '${name}' failed assertions.`;
+        } else if (outcome.contractResult && !outcome.contractResult.valid) {
+          errMsg = `Prerequisite request '${name}' failed contract validation.`;
+        }
+        return {
+          ok: false,
+          validationError: { field: "variables", message: errMsg },
+        };
+      }
+    }
+
+    if (isTarget) {
+      return outcome;
+    }
+  }
+
+  return {
+    ok: false,
+    validationError: { field: "variables", message: "No requests executed." },
+  };
+}
+
 const initial = loadInitialState();
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -586,9 +797,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
     const requestConfig = tabToRequestConfig(tab);
-    const { workspace, requestId } = wsCreateRequest(get().workspace, location, name, requestConfig);
+    const { workspace: proposedWorkspace, requestId } = wsCreateRequest(get().workspace, location, name, requestConfig);
+    validateWorkspaceDependencies(proposedWorkspace, requestId);
     set((s) => ({
-      workspace,
+      workspace: proposedWorkspace,
       tabs: updateTab(s.tabs, tabId, {
         name,
         savedRequestId: requestId,
@@ -602,9 +814,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab || !tab.savedRequestId || !tab.savedLocation) return;
     const requestConfig = tabToRequestConfig(tab);
-    const workspace = wsUpdateRequestConfig(get().workspace, tab.savedLocation, tab.savedRequestId, requestConfig);
+    const proposedWorkspace = wsUpdateRequestConfig(get().workspace, tab.savedLocation, tab.savedRequestId, requestConfig);
+    validateWorkspaceDependencies(proposedWorkspace, tab.savedRequestId);
     set((s) => ({
-      workspace,
+      workspace: proposedWorkspace,
       tabs: updateTab(s.tabs, tabId, { savedSnapshot: requestConfig }),
     }));
   },
@@ -733,13 +946,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       state.contractRequestValidationEnabled,
     );
 
-    const outcome = await executeRequestConfig(
-      tab.id,
+    const executed = new Set<string>();
+
+    const outcome = await executeRequestWithDependencies(
+      tab.savedRequestId || tab.id,
       tab.name,
       tabToRequestConfig(tab),
       { environment: activeEnvironment, runtime: state.tabRuntimeVariables[tabId] ?? {} },
       controller.signal,
       contract.options,
+      state.workspace,
+      executed,
     );
 
     // Coverage counts operations that were actually exercised this session
@@ -911,56 +1128,62 @@ export const useAppStore = create<AppState>((set, get) => ({
       // never see a value left over from iteration 1 (see
       // docs/ARCHITECTURE.md's Milestone 8 section).
       let runtime: Record<string, string> = {};
+      const executed = new Set<string>();
 
       for (const req of flat) {
         if (controller.signal.aborted) break outer;
 
-        setItem(iterationIndex, req.id, { status: "running" });
+        if (executed.has(req.id)) {
+          continue;
+        }
 
-        const outcome = await executeRequestConfig(
+        const outcome = await executeRequestWithDependencies(
           req.id,
           req.name,
           req.request,
           { environment, runtime, iteration: iterationData },
           controller.signal,
           contract.options,
+          state.workspace,
+          executed,
+          (stepId, _stepName) => {
+            setItem(iterationIndex, stepId, { status: "running" });
+          },
+          (stepId, _stepName, stepOutcome) => {
+            if (contract.specId && stepOutcome.contractResult?.operation) {
+              useContractStore.getState().recordValidatedOperation(contract.specId, stepOutcome.contractResult.operation.id);
+            }
+
+            const assertionStatus = !stepOutcome.ok ? "error" : (stepOutcome.testResult?.status ?? "passed");
+            const contractFailed = stepOutcome.contractResult !== undefined && !stepOutcome.contractResult.valid;
+            const itemStatus =
+              contractFailed && (assertionStatus === "passed" || assertionStatus === "skipped")
+                ? "contract-failed"
+                : assertionStatus;
+
+            setItem(iterationIndex, stepId, {
+              status: itemStatus,
+              response: stepOutcome.response,
+              testResult: stepOutcome.testResult,
+              validationError: stepOutcome.validationError,
+              extractionResults: stepOutcome.extractionResults,
+              contractResult: stepOutcome.contractResult,
+            });
+
+            if (stepOutcome.ok && stepOutcome.extractedVariables) {
+              runtime = { ...runtime, ...stepOutcome.extractedVariables };
+            }
+          }
         );
+
         if (controller.signal.aborted) break outer;
 
-        if (contract.specId && outcome.contractResult?.operation) {
-          useContractStore.getState().recordValidatedOperation(contract.specId, outcome.contractResult.operation.id);
-        }
-
-        // A contract violation is its own failure reason, tracked separately
-        // from assertion outcomes so the Runner can report them distinctly
-        // rather than collapsing both into one ambiguous "failed" (spec §29).
         const assertionStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
         const contractFailed = outcome.contractResult !== undefined && !outcome.contractResult.valid;
-        // A contract failure surfaces whenever the assertions themselves did
-        // not fail — including when a request has no assertions at all, whose
-        // assertion status is "skipped". An earlier version only promoted
-        // "passed", which silently hid every contract violation on the very
-        // requests most likely to rely on contract testing instead of
-        // hand-written assertions. A genuine assertion failure or execution
-        // error keeps its own status, since that is the more specific reason
-        // and the contract result stays attached to the item either way.
         const itemStatus =
           contractFailed && (assertionStatus === "passed" || assertionStatus === "skipped")
             ? "contract-failed"
             : assertionStatus;
-
-        setItem(iterationIndex, req.id, {
-          status: itemStatus,
-          response: outcome.response,
-          testResult: outcome.testResult,
-          validationError: outcome.validationError,
-          extractionResults: outcome.extractionResults,
-          contractResult: outcome.contractResult,
-        });
-
-        if (outcome.ok && outcome.extractedVariables) {
-          runtime = { ...runtime, ...outcome.extractedVariables };
-        }
 
         if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error" || itemStatus === "contract-failed")) {
           break outer;

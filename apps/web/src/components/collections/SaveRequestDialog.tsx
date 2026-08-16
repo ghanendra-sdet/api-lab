@@ -22,8 +22,13 @@ export function SaveRequestDialog({ tabId, onClose }: SaveRequestDialogProps) {
 
   function handleSave() {
     if (!collectionId || !name.trim()) return;
-    saveNewRequest(tabId, { collectionId, folderId: folderId || undefined }, name.trim());
-    onClose();
+    try {
+      saveNewRequest(tabId, { collectionId, folderId: folderId || undefined }, name.trim());
+      onClose();
+    } catch (e) {
+      const error = e as Error;
+      window.alert(error.message);
+    }
   }
 
   if (collections.length === 0) {
