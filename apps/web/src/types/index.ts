@@ -58,3 +58,56 @@ export interface HistoryItem {
   requestConfig: RequestConfig;
 }
 
+import type { RunnerItemStatus } from "../lib/runner";
+import type { ValidationError } from "@api-lab/request-engine";
+import type { TestResult } from "@api-lab/test-engine";
+import type { ExtractionResult } from "@api-lab/runner-engine";
+import type { ContractValidationResult } from "@api-lab/contract-engine";
+
+export interface PersistedRunnerItemResult {
+  requestId: string;
+  name: string;
+  status: RunnerItemStatus;
+  response?: {
+    status: number | null;
+    statusText: string;
+    ok: boolean;
+    duration: number;
+    size: number | null;
+  };
+  testResult?: TestResult;
+  validationError?: ValidationError;
+  extractionResults?: Omit<ExtractionResult, "value">[];
+  contractResult?: ContractValidationResult;
+}
+
+export interface PersistedRunnerIterationResult {
+  index: number;
+  data: Record<string, string>;
+  items: PersistedRunnerItemResult[];
+}
+
+export interface RunnerRunHistoryItem {
+  id: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs?: number;
+  collectionId: string;
+  collectionName: string;
+  folderId: string | null;
+  folderName: string | null;
+  environmentId: string | null;
+  environmentName: string | null;
+  iterationCount: number;
+  hasDataset: boolean;
+  datasetName: string | null;
+  totalRequests: number;
+  passedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  overallStatus: "passed" | "failed" | "cancelled";
+  stopOnFailure: boolean;
+  delayMs?: number;
+  iterations: PersistedRunnerIterationResult[];
+}
+

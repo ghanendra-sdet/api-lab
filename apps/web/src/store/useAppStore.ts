@@ -50,7 +50,7 @@ import type {
 import { createAssertion, type Assertion, type TestResult } from "@api-lab/test-engine";
 import { createExtraction, type Dataset, type Extraction, type ExtractionResult } from "@api-lab/runner-engine";
 import type { ContractValidationResult } from "@api-lab/contract-engine";
-import type { RequestTabState, HistoryItem } from "../types";
+import type { RequestTabState, HistoryItem, RunnerRunHistoryItem } from "../types";
 import { createId } from "../lib/id";
 import { createEmptyTab, createInitialTab } from "../lib/seedData";
 import { createSeedWorkspace } from "../lib/seedWorkspace";
@@ -85,7 +85,10 @@ import {
   loadHistoryFromStorage,
   saveHistoryToStorage,
   resetHistoryStorage,
+  loadRunnerHistoryFromStorage,
+  saveRunnerHistoryToStorage,
 } from "../lib/persistence";
+
 
 function getPreferredTheme(): ThemeMode {
   if (typeof window === "undefined") return "light";
@@ -102,6 +105,7 @@ interface InitialState {
   tabs: RequestTabState[];
   activeTabId: string;
   history: HistoryItem[];
+  runnerHistory: RunnerRunHistoryItem[];
 }
 
 function loadInitialState(): InitialState {
@@ -120,6 +124,7 @@ function loadInitialState(): InitialState {
   const environmentsLoadError = environmentsResult.status === "error" ? environmentsResult.detail : null;
 
   const history = loadHistoryFromStorage();
+  const runnerHistory = loadRunnerHistoryFromStorage();
 
   const persistedTabs = loadTabsFromStorage();
   if (persistedTabs) {
@@ -131,6 +136,7 @@ function loadInitialState(): InitialState {
       tabs: persistedTabs.tabs,
       activeTabId: persistedTabs.activeTabId,
       history,
+      runnerHistory,
     };
   }
 
@@ -143,6 +149,7 @@ function loadInitialState(): InitialState {
     tabs: [tab],
     activeTabId: tab.id,
     history,
+    runnerHistory,
   };
 }
 
@@ -299,14 +306,22 @@ interface AppState {
    */
   runnerIncludeSecurity: boolean;
   setRunnerIncludeSecurity: (enabled: boolean) => void;
+  runnerDelayMs: number;
+  setRunnerDelayMs: (ms: number) => void;
+  runnerIterations: number;
+  setRunnerIterations: (iterations: number) => void;
   /** Security results from the most recent run. Session-only, never persisted
    * (see lib/securityPersistence.ts). */
   runnerSecurityResults: SecurityTestResult[];
+  runnerHistory: RunnerRunHistoryItem[];
+  removeRunnerHistoryEntry: (id: string) => void;
+  clearRunnerHistory: (collectionId?: string, folderId?: string | null) => void;
   startRunner: (
     collectionId: string,
     requestIds: string[],
     environmentId: string | null,
     stopOnFailure: boolean,
+    folderId?: string | null,
   ) => Promise<void>;
   cancelRunner: () => void;
   resetRunner: () => void;
@@ -432,6 +447,25 @@ function findSavedRequest(workspace: Workspace, id: string): SavedRequest | unde
   return undefined;
 }
 
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("Cancelled"));
+    const timer = setTimeout(() => {
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("Cancelled"));
+    };
+    if (signal) {
+      signal.addEventListener("abort", onAbort);
+    }
+  });
+}
+
 function isExecutionFailure(outcome: ExecuteRequestResult): boolean {
   if (!outcome.ok) return true;
   if (!outcome.response) return true;
@@ -439,6 +473,9 @@ function isExecutionFailure(outcome: ExecuteRequestResult): boolean {
     return true;
   }
   if (outcome.contractResult && !outcome.contractResult.valid) {
+    return true;
+  }
+  if (outcome.extractionResults && outcome.extractionResults.some((r) => !r.ok)) {
     return true;
   }
   return false;
@@ -469,9 +506,27 @@ async function executeRequestWithDependencies(
 
   const resolution = resolveDependencyOrder(targetId, dependencyMap);
   if (!resolution.ok) {
+    const error = resolution.error;
+    let message = "Invalid dependency configuration.";
+    if (error.type === "self-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      message = `Request ${name} cannot depend on itself.`;
+    } else if (error.type === "duplicate-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      const duplicateName = getRequestName(workspace, error.duplicateId);
+      message = `Request ${name} contains duplicate dependency ${duplicateName}.`;
+    } else if (error.type === "missing-dependency") {
+      const name = getRequestName(workspace, error.requestId);
+      message = `Request ${name} depends on missing request ${error.missingId}.`;
+    } else if (error.type === "circular-dependency") {
+      const chainStr = formatCircularDependencyChain(
+        error.chain.map((id) => getRequestName(workspace, id))
+      );
+      message = `Circular dependency detected:\n${chainStr}`;
+    }
     return {
       ok: false,
-      validationError: { field: "variables", message: "Invalid dependency configuration." },
+      validationError: { field: "variables", message },
     };
   }
 
@@ -503,6 +558,17 @@ async function executeRequestWithDependencies(
       }
       name = saved.name;
       config = saved.request;
+    }
+
+    if (executed.size > 0 && scopes.delayMs && scopes.delayMs > 0) {
+      try {
+        await sleep(scopes.delayMs, signal);
+      } catch {
+        return {
+          ok: false,
+          validationError: { field: "variables", message: "Execution cancelled." },
+        };
+      }
     }
 
     if (onStepStart) {
@@ -717,10 +783,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: initial.activeTabId,
 
   history: initial.history,
+  runnerHistory: initial.runnerHistory,
 
   clearHistory: () => {
     resetHistoryStorage();
     set({ history: [] });
+  },
+
+  removeRunnerHistoryEntry: (id) => {
+    const updated = get().runnerHistory.filter((item) => item.id !== id);
+    set({ runnerHistory: updated });
+    saveRunnerHistoryToStorage(updated);
+  },
+
+  clearRunnerHistory: (collectionId?: string, folderId?: string | null) => {
+    if (collectionId !== undefined) {
+      const updated = get().runnerHistory.filter(
+        (run) =>
+          !(
+            run.collectionId === collectionId &&
+            (folderId ? run.folderId === folderId : run.folderId === null)
+          )
+      );
+      set({ runnerHistory: updated });
+      saveRunnerHistoryToStorage(updated);
+    } else {
+      set({ runnerHistory: [] });
+      saveRunnerHistoryToStorage([]);
+    }
   },
 
   openHistoryItem: (item) => {
@@ -1069,9 +1159,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRunnerValidateContract: (enabled) => set({ runnerValidateContract: enabled }),
   runnerIncludeSecurity: false,
   setRunnerIncludeSecurity: (enabled) => set({ runnerIncludeSecurity: enabled }),
+  runnerDelayMs: 0,
+  setRunnerDelayMs: (ms) => set({ runnerDelayMs: ms }),
+  runnerIterations: 1,
+  setRunnerIterations: (iterations) => set({ runnerIterations: iterations }),
   runnerSecurityResults: [],
 
-  startRunner: async (collectionId, requestIds, environmentId, stopOnFailure) => {
+  startRunner: async (collectionId, requestIds, environmentId, stopOnFailure, folderId) => {
     const state = get();
     const collection = state.workspace.collections.find((c) => c.id === collectionId);
     if (!collection) return;
@@ -1084,9 +1178,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // being run (spec §26/§29), never against whatever the request workspace
     // happens to have selected.
     const contract = buildContractOptions(collectionId, state.runnerValidateContract, false);
-    // A dataset-less run is exactly one iteration with an empty data row —
-    // the common case looks identical to Milestone 7's single-pass runner.
-    const iterationRows = dataset && dataset.rows.length > 0 ? dataset.rows : [{}];
+    // A dataset-less run repeats empty data rows based on the manual iterations count.
+    const manualIterations = state.runnerIterations > 0 ? state.runnerIterations : 1;
+    const iterationRows = dataset && dataset.rows.length > 0
+      ? dataset.rows
+      : Array.from({ length: manualIterations }, () => ({}));
     const controller = new AbortController();
 
     set({
@@ -1095,8 +1191,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       runnerState: {
         status: "running",
         collectionId,
+        folderId: folderId || null,
         environmentId,
         stopOnFailure,
+        delayMs: state.runnerDelayMs,
         datasetName: state.runnerDatasetName,
         validateContract: contract.options !== undefined,
         iterations: iterationRows.map((data, index) => ({
@@ -1125,6 +1223,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     outer: for (let iterationIndex = 0; iterationIndex < iterationRows.length; iterationIndex++) {
+      if (iterationIndex > 0 && state.runnerDelayMs > 0) {
+        try {
+          await sleep(state.runnerDelayMs, controller.signal);
+        } catch {
+          break outer;
+        }
+      }
       const iterationData = iterationRows[iterationIndex]!;
       // Fresh runtime map per iteration — an extraction in iteration 2 must
       // never see a value left over from iteration 1 (see
@@ -1143,7 +1248,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           req.id,
           req.name,
           req.request,
-          { environment, runtime, iteration: iterationData },
+          { environment, runtime, iteration: iterationData, delayMs: state.runnerDelayMs },
           controller.signal,
           contract.options,
           state.workspace,
@@ -1156,7 +1261,8 @@ export const useAppStore = create<AppState>((set, get) => ({
               useContractStore.getState().recordValidatedOperation(contract.specId, stepOutcome.contractResult.operation.id);
             }
 
-            const assertionStatus = !stepOutcome.ok ? "error" : (stepOutcome.testResult?.status ?? "passed");
+            const hasExtractionFailed = stepOutcome.extractionResults?.some((r) => !r.ok);
+            const assertionStatus = (!stepOutcome.ok || hasExtractionFailed) ? "error" : (stepOutcome.testResult?.status ?? "passed");
             const contractFailed = stepOutcome.contractResult !== undefined && !stepOutcome.contractResult.valid;
             const itemStatus =
               contractFailed && (assertionStatus === "passed" || assertionStatus === "skipped")
@@ -1180,12 +1286,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         if (controller.signal.aborted) break outer;
 
-        const assertionStatus = !outcome.ok ? "error" : (outcome.testResult?.status ?? "passed");
+        const hasExtractionFailed = outcome.extractionResults?.some((r) => !r.ok);
+        const assertionStatus = (!outcome.ok || hasExtractionFailed) ? "error" : (outcome.testResult?.status ?? "passed");
         const contractFailed = outcome.contractResult !== undefined && !outcome.contractResult.valid;
         const itemStatus =
           contractFailed && (assertionStatus === "passed" || assertionStatus === "skipped")
             ? "contract-failed"
             : assertionStatus;
+
+        const currentItems = get().runnerState.iterations[iterationIndex]!.items;
+        const currentItem = currentItems.find((item) => item.requestId === req.id);
+        if (currentItem && currentItem.status === "pending") {
+          setItem(iterationIndex, req.id, {
+            status: itemStatus,
+            validationError: outcome.validationError,
+          });
+        }
 
         if (stopOnFailure && (itemStatus === "failed" || itemStatus === "error" || itemStatus === "contract-failed")) {
           break outer;
@@ -1253,6 +1369,92 @@ export const useAppStore = create<AppState>((set, get) => ({
         durationMs: Date.now() - (s.runnerState.startedAt ?? Date.now()),
       },
     }));
+
+    const finalState = get().runnerState;
+    if (finalState.collectionId) {
+      const collection = state.workspace.collections.find((c) => c.id === finalState.collectionId);
+      const collectionName = collection ? collection.name : "Unknown Collection";
+      const folder = collection && folderId
+        ? collection.items.find((item) => isFolder(item) && item.id === folderId)
+        : null;
+      const folderName = folder && isFolder(folder) ? folder.name : null;
+      const environment = state.environments.environments.find((e) => e.id === environmentId);
+      const environmentName = environment ? environment.name : null;
+
+      let passedCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
+      for (const iter of finalState.iterations) {
+        for (const item of iter.items) {
+          if (item.status === "passed") {
+            passedCount++;
+          } else if (item.status === "failed" || item.status === "error" || item.status === "contract-failed") {
+            failedCount++;
+          } else if (item.status === "skipped" || item.status === "cancelled") {
+            skippedCount++;
+          }
+        }
+      }
+      const totalRequests = passedCount + failedCount + skippedCount;
+      const overallStatus = wasCancelled
+        ? "cancelled"
+        : failedCount > 0
+          ? "failed"
+          : "passed";
+
+      const persistedIterations = finalState.iterations.map((iteration) => ({
+        index: iteration.index,
+        data: iteration.data,
+        items: iteration.items.map((item) => ({
+          requestId: item.requestId,
+          name: item.name,
+          status: item.status,
+          response: item.response ? {
+            status: item.response.status,
+            statusText: item.response.statusText,
+            ok: item.response.ok,
+            duration: item.response.duration,
+            size: item.response.size,
+          } : undefined,
+          testResult: item.testResult,
+          validationError: item.validationError,
+          extractionResults: item.extractionResults?.map((r) => ({
+            extraction: r.extraction,
+            ok: r.ok,
+            error: r.error,
+          })),
+          contractResult: item.contractResult,
+        })),
+      }));
+
+      const historyItem: RunnerRunHistoryItem = {
+        id: createId("run"),
+        startedAt: finalState.startedAt ?? Date.now(),
+        endedAt: Date.now(),
+        durationMs: finalState.durationMs,
+        collectionId: finalState.collectionId,
+        collectionName,
+        folderId: finalState.folderId || null,
+        folderName,
+        environmentId: finalState.environmentId,
+        environmentName,
+        iterationCount: finalState.iterations.length,
+        hasDataset: !!finalState.datasetName,
+        datasetName: finalState.datasetName,
+        totalRequests,
+        passedCount,
+        failedCount,
+        skippedCount,
+        overallStatus,
+        stopOnFailure,
+        delayMs: finalState.delayMs,
+        iterations: persistedIterations,
+      };
+
+      const updatedHistory = [historyItem, ...get().runnerHistory].slice(0, 50);
+      set({ runnerHistory: updatedHistory });
+      saveRunnerHistoryToStorage(updatedHistory);
+    }
   },
 
   cancelRunner: () => {

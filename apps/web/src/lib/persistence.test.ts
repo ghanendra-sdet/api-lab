@@ -11,6 +11,8 @@ import {
   loadTabsFromStorage,
   loadEnvironmentsFromStorage,
   resetEnvironmentsStorage,
+  loadRunnerHistoryFromStorage,
+  resetRunnerHistoryStorage,
 } from "./persistence";
 
 const WORKSPACE_KEY = "api-lab-workspace";
@@ -136,5 +138,64 @@ describe("persistence: environments", () => {
     );
     resetEnvironmentsStorage();
     expect(window.localStorage.getItem(ENVIRONMENTS_KEY)).toBeNull();
+  });
+});
+
+describe("persistence: runner history", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("reports empty [] when nothing is stored", () => {
+    expect(loadRunnerHistoryFromStorage()).toEqual([]);
+  });
+
+  it("returns empty [] (not a throw) for malformed JSON", () => {
+    window.localStorage.setItem("api-lab-runner-history", "{not json");
+    expect(loadRunnerHistoryFromStorage()).toEqual([]);
+  });
+
+  it("returns empty [] (not a throw) for structurally invalid history item", () => {
+    window.localStorage.setItem(
+      "api-lab-runner-history",
+      JSON.stringify([{ invalidField: "should be ignored" }]),
+    );
+    expect(loadRunnerHistoryFromStorage()).toEqual([]);
+  });
+
+  it("round-trips a valid persisted run history item", () => {
+    const validItem = {
+      id: "run_123",
+      startedAt: 1000,
+      endedAt: 1050,
+      collectionId: "col_1",
+      collectionName: "Col A",
+      folderId: null,
+      folderName: null,
+      environmentId: null,
+      environmentName: null,
+      iterationCount: 1,
+      hasDataset: false,
+      datasetName: null,
+      totalRequests: 1,
+      passedCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+      overallStatus: "passed",
+      stopOnFailure: true,
+      iterations: [],
+    };
+    window.localStorage.setItem("api-lab-runner-history", JSON.stringify([validItem]));
+
+    const result = loadRunnerHistoryFromStorage();
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("run_123");
+    expect(result[0]!.collectionName).toBe("Col A");
+  });
+
+  it("resetRunnerHistoryStorage clears the stored runner history", () => {
+    window.localStorage.setItem("api-lab-runner-history", JSON.stringify([{ id: "run_1" }]));
+    resetRunnerHistoryStorage();
+    expect(window.localStorage.getItem("api-lab-runner-history")).toBeNull();
   });
 });

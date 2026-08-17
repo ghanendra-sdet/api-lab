@@ -81,6 +81,7 @@ export type RunnerStatus = "idle" | "running" | "completed" | "cancelled";
 export interface RunnerState {
   status: RunnerStatus;
   collectionId: string | null;
+  folderId?: string | null;
   environmentId: string | null;
   stopOnFailure: boolean;
   datasetName: string | null;
@@ -89,17 +90,20 @@ export interface RunnerState {
   iterations: RunnerIterationResult[];
   startedAt?: number;
   durationMs?: number;
+  delayMs?: number;
 }
 
 export function createIdleRunnerState(): RunnerState {
   return {
     status: "idle",
     collectionId: null,
+    folderId: null,
     environmentId: null,
     stopOnFailure: true,
     datasetName: null,
     validateContract: false,
     iterations: [],
+    delayMs: 0,
   };
 }
 

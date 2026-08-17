@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Folder } from "@api-lab/workspace-engine";
 import { useAppStore } from "../../store/useAppStore";
 import { RequestItem } from "./RequestItem";
+import { RunnerDialog } from "../runner/RunnerDialog";
 
 interface FolderItemProps {
   collectionId: string;
@@ -10,7 +11,9 @@ interface FolderItemProps {
 
 export function FolderItem({ collectionId, folder }: FolderItemProps) {
   const [expanded, setExpanded] = useState(true);
+  const [runnerOpen, setRunnerOpen] = useState(false);
   const panelId = `folder-panel-${folder.id}`;
+  const collection = useAppStore((s) => s.workspace.collections.find((c) => c.id === collectionId));
   const renameFolder = useAppStore((s) => s.renameFolder);
   const deleteFolder = useAppStore((s) => s.deleteFolder);
   const saveNewRequest = useAppStore((s) => s.saveNewRequest);
@@ -62,6 +65,15 @@ export function FolderItem({ collectionId, folder }: FolderItemProps) {
           </button>
           <button
             type="button"
+            onClick={() => setRunnerOpen(true)}
+            aria-label={`Run ${folder.name}`}
+            title="Run Folder"
+            className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            ▶
+          </button>
+          <button
+            type="button"
             onClick={handleRename}
             aria-label={`Rename ${folder.name}`}
             className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
@@ -88,6 +100,13 @@ export function FolderItem({ collectionId, folder }: FolderItemProps) {
             ))
           )}
         </ul>
+      )}
+      {runnerOpen && collection && (
+        <RunnerDialog
+          collection={collection}
+          folderId={folder.id}
+          onClose={() => setRunnerOpen(false)}
+        />
       )}
     </li>
   );

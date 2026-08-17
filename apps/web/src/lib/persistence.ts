@@ -4,7 +4,7 @@ import {
   serializeEnvironments,
   type EnvironmentWorkspace,
 } from "@api-lab/environment-engine";
-import type { RequestTabState, HistoryItem } from "../types";
+import type { RequestTabState, HistoryItem, RunnerRunHistoryItem } from "../types";
 import { debounce } from "./debounce";
 
 const HISTORY_KEY = "api-lab-request-history";
@@ -207,5 +207,49 @@ export const saveHistoryToStorage = debounce(writeHistoryNow, DEBOUNCE_MS);
 export function resetHistoryStorage(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(HISTORY_KEY);
+}
+
+const RUNNER_HISTORY_KEY = "api-lab-runner-history";
+
+export function loadRunnerHistoryFromStorage(): RunnerRunHistoryItem[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(RUNNER_HISTORY_KEY);
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is RunnerRunHistoryItem => {
+        return (
+          typeof item === "object" &&
+          item !== null &&
+          typeof item.id === "string" &&
+          typeof item.collectionId === "string" &&
+          typeof item.collectionName === "string" &&
+          typeof item.startedAt === "number" &&
+          typeof item.endedAt === "number" &&
+          Array.isArray(item.iterations)
+        );
+      });
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRunnerHistoryNow(data: RunnerRunHistoryItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RUNNER_HISTORY_KEY, JSON.stringify(data));
+  } catch {
+    // Non-fatal.
+  }
+}
+
+export const saveRunnerHistoryToStorage = debounce(writeRunnerHistoryNow, DEBOUNCE_MS);
+
+export function resetRunnerHistoryStorage(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(RUNNER_HISTORY_KEY);
 }
 

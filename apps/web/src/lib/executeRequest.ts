@@ -75,6 +75,7 @@ export interface ExecutionScopes {
   runtime?: Record<string, string>;
   /** The current dataset row, if the caller is running a data-driven iteration. */
   iteration?: Record<string, string>;
+  delayMs?: number;
 }
 
 /**
