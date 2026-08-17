@@ -3,15 +3,18 @@ import {
   deserializeEnvironments,
   serializeEnvironments,
   type EnvironmentWorkspace,
+  type Variable,
 } from "@api-lab/environment-engine";
 import type { RequestTabState, HistoryItem, RunnerRunHistoryItem } from "../types";
 import { debounce } from "./debounce";
+import { z } from "zod";
 
 const HISTORY_KEY = "api-lab-request-history";
-
 const WORKSPACE_KEY = "api-lab-workspace";
 const TABS_KEY = "api-lab-tabs";
 const ENVIRONMENTS_KEY = "api-lab-environments";
+const GLOBALS_KEY = "api-lab-globals";
+const GLOBALS_FORMAT_VERSION = 1;
 const DEBOUNCE_MS = 400;
 
 // ---------------------------------------------------------------------------
@@ -161,6 +164,63 @@ export const saveEnvironmentsToStorage = debounce(writeEnvironmentsNow, DEBOUNCE
 export function resetEnvironmentsStorage(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(ENVIRONMENTS_KEY);
+}
+
+// ---------------------------------------------------------------------------
+// Global Variables Persistence
+// ---------------------------------------------------------------------------
+
+const persistedGlobalsSchema = z.object({
+  version: z.literal(GLOBALS_FORMAT_VERSION),
+  variables: z.array(z.object({
+    id: z.string(),
+    key: z.string(),
+    value: z.string(),
+    enabled: z.boolean(),
+    secret: z.boolean(),
+  })),
+});
+
+export type LoadGlobalsResult =
+  | { status: "empty" }
+  | { status: "ok"; variables: Variable[] }
+  | { status: "error"; detail: string };
+
+export function loadGlobalsFromStorage(): LoadGlobalsResult {
+  if (typeof window === "undefined") return { status: "empty" };
+  const raw = window.localStorage.getItem(GLOBALS_KEY);
+  if (raw === null) return { status: "empty" };
+
+  try {
+    const parsed = JSON.parse(raw);
+    const result = persistedGlobalsSchema.safeParse(parsed);
+    if (!result.success) {
+      return { status: "error", detail: "Globals data does not conform to the expected format." };
+    }
+    return { status: "ok", variables: result.data.variables };
+  } catch {
+    return { status: "error", detail: "Saved globals data is not valid JSON." };
+  }
+}
+
+function writeGlobalsNow(variables: Variable[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const data = {
+      version: GLOBALS_FORMAT_VERSION,
+      variables,
+    };
+    window.localStorage.setItem(GLOBALS_KEY, JSON.stringify(data));
+  } catch {
+    // Non-fatal
+  }
+}
+
+export const saveGlobalsToStorage = debounce(writeGlobalsNow, DEBOUNCE_MS);
+
+export function resetGlobalsStorage(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(GLOBALS_KEY);
 }
 
 // ---------------------------------------------------------------------------

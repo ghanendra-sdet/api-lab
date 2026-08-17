@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const noAuthSchema = z.object({ type: z.literal("none") });
+const inheritAuthSchema = z.object({ type: z.literal("inherit") });
 const apiKeySchema = z.object({
   type: z.literal("apiKey"),
   key: z.string(),
@@ -14,6 +15,7 @@ const oauth2Schema = z.object({ type: z.literal("oauth2") });
 
 export const authConfigSchema = z.discriminatedUnion("type", [
   noAuthSchema,
+  inheritAuthSchema,
   apiKeySchema,
   basicSchema,
   bearerSchema,

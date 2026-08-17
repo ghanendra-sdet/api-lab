@@ -6,6 +6,7 @@ import type { AuthConfig, AuthValidationError } from "./types.ts";
 export function validateAuthConfig(config: AuthConfig): AuthValidationError | null {
   switch (config.type) {
     case "none":
+    case "inherit":
       return null;
     case "apiKey":
       if (config.key.trim() === "") return { field: "auth", message: "API key name is required." };

@@ -16,6 +16,14 @@ const keyValueRowSchema = z.object({
   enabled: z.boolean(),
 });
 
+const variableSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  value: z.string(),
+  enabled: z.boolean(),
+  secret: z.boolean(),
+});
+
 const requestConfigSchema = z.object({
   method: httpMethodSchema,
   url: z.string(),
@@ -39,9 +47,9 @@ const requestConfigSchema = z.object({
   preRequestScript: z.string().optional(),
   postResponseScript: z.string().optional(),
   // Backward compatibility (Milestone B3.1): requests saved before this
-  // milestone have no `dependsOn` field at all — left undefined on load,
-  // matching the `preRequestScript`/`postResponseScript` pattern above.
+  // milestone have no `dependsOn` field at all — left undefined on load.
   dependsOn: z.array(z.string()).optional(),
+  variables: z.array(variableSchema).default([]),
 });
 
 const savedRequestSchema = z.object({
@@ -60,6 +68,8 @@ const folderSchema = z.object({
   items: z.array(savedRequestSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+  variables: z.array(variableSchema).default([]),
+  auth: authConfigSchema.default({ type: "inherit" }),
 });
 
 const collectionItemSchema = z.union([savedRequestSchema, folderSchema]);
@@ -71,6 +81,8 @@ const collectionSchema = z.object({
   items: z.array(collectionItemSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+  variables: z.array(variableSchema).default([]),
+  auth: authConfigSchema.default({ type: "none" }),
 });
 
 export const workspaceSchema = z.object({

@@ -2,6 +2,7 @@ import type { BodyMode, BodyRawFormat, HttpMethod, KeyValueRow } from "@api-lab/
 import type { AuthConfig } from "@api-lab/auth-engine";
 import type { Assertion } from "@api-lab/test-engine";
 import type { Extraction } from "@api-lab/runner-engine";
+import type { Variable } from "@api-lab/environment-engine";
 
 /**
  * The persisted, request-engine-agnostic shape of a request's configuration.
@@ -48,6 +49,7 @@ export interface RequestConfig {
   preRequestScript?: string;
   postResponseScript?: string;
   dependsOn?: string[];
+  variables?: Variable[];
 }
 
 export interface SavedRequest {
@@ -67,6 +69,8 @@ export interface Folder {
   items: SavedRequest[];
   createdAt: string;
   updatedAt: string;
+  variables?: Variable[];
+  auth?: AuthConfig;
 }
 
 export type CollectionItem = SavedRequest | Folder;
@@ -78,6 +82,8 @@ export interface Collection {
   items: CollectionItem[];
   createdAt: string;
   updatedAt: string;
+  variables?: Variable[];
+  auth?: AuthConfig;
 }
 
 export interface Workspace {

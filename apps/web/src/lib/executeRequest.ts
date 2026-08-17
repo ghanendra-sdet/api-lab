@@ -7,7 +7,7 @@ import {
   type BuiltRequest,
   type ValidationError,
 } from "@api-lab/request-engine";
-import { buildVariableContext, resolveRequestConfig, type Environment } from "@api-lab/environment-engine";
+import { buildVariableContext, buildVariableContextFromVariables, resolveRequestConfig, type Environment } from "@api-lab/environment-engine";
 import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
 import { evaluateAssertions, buildTestResult, type TestResult } from "@api-lab/test-engine";
 import { extractAll, mergeResolutionContext, type ExtractionResult } from "@api-lab/runner-engine";
@@ -19,6 +19,7 @@ import {
 import type { RequestConfig } from "@api-lab/workspace-engine";
 import type { KeyValueRow } from "@api-lab/shared";
 import { resolveAuthConfig } from "./authResolve";
+import { resolveInheritedAuth } from "./authInheritance";
 import { resolveAssertions } from "./resolveAssertions";
 import { buildContractRequestInput } from "./contractAdapt";
 import { runScript, type ScriptResult } from "@api-lab/script-engine";
@@ -71,11 +72,34 @@ export interface ContractExecutionOptions {
 
 export interface ExecutionScopes {
   environment?: Environment;
+  /**
+   * Global variables (the Zustand store's `globals`, D.1 Step 4) — lowest
+   * precedence of the seven layers `mergeResolutionContext` merges. See
+   * @api-lab/runner-engine's `ResolutionScopes`/`mergeResolutionContext` for
+   * the full seven-layer precedence order this participates in.
+   */
+  global?: Record<string, string>;
+  /** The containing Collection's own variables (D.1 Step 5), if resolvable. */
+  collection?: Record<string, string>;
+  /** The containing Folder's own variables (D.1 Step 5), if the request lives in one. */
+  folder?: Record<string, string>;
   /** Variables extracted by earlier requests in this run/iteration. */
   runtime?: Record<string, string>;
   /** The current dataset row, if the caller is running a data-driven iteration. */
   iteration?: Record<string, string>;
   delayMs?: number;
+  /**
+   * The containing Folder's/Collection's *auth* config (D.1 Step 5),
+   * already concrete (not itself further resolved) — consulted only when
+   * the request's own `config.auth` is `{type:"inherit"}`. See
+   * `authInheritance.ts`'s `resolveInheritedAuth` for the algorithm. The
+   * request's own `variables` (the "request" scope in the seven-layer
+   * chain) come from `config.variables` directly, since `config` already
+   * varies per step of a dependency chain — no separate scope field is
+   * needed for it here.
+   */
+  folderAuth?: AuthConfig;
+  collectionAuth?: AuthConfig;
 }
 
 /**
@@ -109,7 +133,11 @@ export function prepareRequest(
   scopes: ExecutionScopes,
 ): { ok: true; prepared: PreparedRequest } | { ok: false; validationError: ValidationError } {
   const context = mergeResolutionContext({
+    global: scopes.global ?? {},
     environment: buildVariableContext(scopes.environment),
+    collection: scopes.collection ?? {},
+    folder: scopes.folder ?? {},
+    request: buildVariableContextFromVariables(config.variables),
     runtime: scopes.runtime ?? {},
     iteration: scopes.iteration ?? {},
   });
@@ -140,7 +168,13 @@ export function prepareRequest(
 
   const resolved = resolution.resolved;
 
-  const authResolution = resolveAuthConfig(config.auth, context);
+  // D.1 Step 5: resolve `{type:"inherit"}` against the containing
+  // Folder/Collection *before* variable interpolation, so a Bearer token
+  // inherited from the Collection still gets its `{{token}}` resolved
+  // exactly like a request's own auth would.
+  const inheritedAuth = resolveInheritedAuth(config.auth, scopes.folderAuth, scopes.collectionAuth);
+
+  const authResolution = resolveAuthConfig(inheritedAuth, context);
   if (authResolution.hasCircularReference) {
     return {
       ok: false,
@@ -175,7 +209,10 @@ export function prepareRequest(
     url: resolved.url,
     queryParams: withAuth.params,
     headers: withAuth.headers,
-    authType: config.auth.type,
+    // `resolveInheritedAuth` never returns `{type:"inherit"}` (see its
+    // docstring/cycle-guard); the `=== "inherit"` fallback is defensive only
+    // — the AuthConfig union still includes "inherit" at the type level.
+    authType: inheritedAuth.type === "inherit" ? "none" : inheritedAuth.type,
     bodyMode: config.bodyMode,
     bodyRawFormat: config.bodyRawFormat,
     bodyRawContent: resolved.bodyRawContent,

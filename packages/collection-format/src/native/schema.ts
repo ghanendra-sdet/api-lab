@@ -16,6 +16,14 @@ const keyValueRowSchema = z.object({
   enabled: z.boolean(),
 });
 
+const variableSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  value: z.string(),
+  enabled: z.boolean(),
+  secret: z.boolean(),
+});
+
 const requestConfigSchema = z.object({
   method: httpMethodSchema,
   url: z.string(),
@@ -30,6 +38,7 @@ const requestConfigSchema = z.object({
   preRequestScript: z.string().optional(),
   postResponseScript: z.string().optional(),
   dependsOn: z.array(z.string()).optional(),
+  variables: z.array(variableSchema).optional(),
 });
 
 const savedRequestSchema = z.object({
@@ -48,6 +57,8 @@ const folderSchema = z.object({
   items: z.array(savedRequestSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+  variables: z.array(variableSchema).optional(),
+  auth: authConfigSchema.optional(),
 });
 
 const collectionSchema = z.object({
@@ -57,15 +68,10 @@ const collectionSchema = z.object({
   items: z.array(z.union([savedRequestSchema, folderSchema])),
   createdAt: z.string(),
   updatedAt: z.string(),
+  variables: z.array(variableSchema).optional(),
+  auth: authConfigSchema.optional(),
 });
 
-const variableSchema = z.object({
-  id: z.string(),
-  key: z.string(),
-  value: z.string(),
-  enabled: z.boolean(),
-  secret: z.boolean(),
-});
 
 const environmentSchema = z.object({
   id: z.string(),

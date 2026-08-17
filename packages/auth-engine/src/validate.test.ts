@@ -36,4 +36,8 @@ describe("validateAuthConfig", () => {
     expect(error).not.toBeNull();
     expect(error?.message).toMatch(/planned/i);
   });
+
+  it("Inherit Auth is always valid", () => {
+    expect(validateAuthConfig(createDefaultAuthConfig("inherit"))).toBeNull();
+  });
 });

@@ -48,6 +48,7 @@ function upsert(rows: KeyValueRow[], key: string, value: string, caseInsensitive
 export function applyAuth(config: AuthConfig, headers: KeyValueRow[], params: KeyValueRow[]): ApplyAuthResult {
   switch (config.type) {
     case "none":
+    case "inherit":
     case "oauth2":
       return { headers, params };
 

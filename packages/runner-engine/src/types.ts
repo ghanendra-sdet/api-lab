@@ -44,9 +44,13 @@ export interface ExtractionResult {
  * redesigning it.
  */
 export interface ResolutionScopes {
-  environment: Record<string, string>;
-  runtime: Record<string, string>;
-  iteration: Record<string, string>;
+  global?: Record<string, string>;
+  environment?: Record<string, string>;
+  collection?: Record<string, string>;
+  folder?: Record<string, string>;
+  request?: Record<string, string>;
+  runtime?: Record<string, string>;
+  iteration?: Record<string, string>;
 }
 
 export function mergeResolutionContext(scopes: ResolutionScopes): Record<string, string> {
@@ -55,7 +59,16 @@ export function mergeResolutionContext(scopes: ResolutionScopes): Record<string,
   // docs/SECURITY.md's Milestone 8 section and environment-engine's
   // existing __proto__ hardening, which this mirrors.
   const merged: Record<string, string> = Object.create(null) as Record<string, string>;
-  Object.assign(merged, scopes.environment, scopes.runtime, scopes.iteration);
+  Object.assign(
+    merged,
+    scopes.global ?? {},
+    scopes.environment ?? {},
+    scopes.collection ?? {},
+    scopes.folder ?? {},
+    scopes.request ?? {},
+    scopes.runtime ?? {},
+    scopes.iteration ?? {},
+  );
   return merged;
 }
 

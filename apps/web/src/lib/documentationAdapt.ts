@@ -67,6 +67,8 @@ export function describeAuth(auth: AuthConfig): DocCollectionAuth {
   switch (auth.type) {
     case "none":
       return { type: "none", location: undefined, parameterName: undefined };
+    case "inherit":
+      return { type: "inherit", location: undefined, parameterName: undefined };
     case "apiKey":
       return {
         type: "api-key",

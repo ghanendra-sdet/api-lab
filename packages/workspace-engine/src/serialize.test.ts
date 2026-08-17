@@ -281,3 +281,104 @@ describe("Milestone B3.1 backward compatibility: pre-dependsOn saved requests", 
     }
   });
 });
+
+describe("Milestone D.1 backward compatibility & serialization", () => {
+  it("loads legacy collections and folders without variables/auth fields and applies defaults", () => {
+    const legacyPersisted = {
+      version: 1,
+      workspace: {
+        collections: [
+          {
+            id: "c1",
+            name: "Collection",
+            items: [
+              {
+                id: "f1",
+                type: "folder",
+                name: "Folder",
+                items: [
+                  {
+                    id: "r1",
+                    type: "request",
+                    name: "Request",
+                    request: {
+                      method: "GET",
+                      url: "https://example.com",
+                      params: [],
+                      headers: [],
+                      bodyMode: "none",
+                      bodyRawFormat: "JSON",
+                      bodyRawContent: "",
+                    },
+                    createdAt: "2024-01-01T00:00:00.000Z",
+                    updatedAt: "2024-01-01T00:00:00.000Z",
+                  }
+                ],
+                createdAt: "2024-01-01T00:00:00.000Z",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              }
+            ],
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          }
+        ]
+      }
+    };
+
+    const result = deserializeWorkspace(legacyPersisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const col = result.workspace.collections[0]!;
+      expect(col.variables).toEqual([]);
+      expect(col.auth).toEqual({ type: "none" });
+
+      const fol = col.items[0];
+      expect(fol && "variables" in fol && fol.variables).toEqual([]);
+      expect(fol && "auth" in fol && fol.auth).toEqual({ type: "inherit" });
+
+      const req = fol && "items" in fol && fol.items[0];
+      expect(req && "request" in req && req.request.variables).toEqual([]);
+      expect(req && "request" in req && req.request.auth).toEqual({ type: "none" });
+    }
+  });
+
+  it("round-trips custom variables and auth parameters on Collection, Folder, and Request", () => {
+    const customVar = { id: "v1", key: "foo", value: "bar", enabled: true, secret: false };
+    const customAuth = { type: "basic" as const, username: "u", password: "p" };
+
+    const workspace = createEmptyWorkspace();
+    const { workspace: w1, collectionId } = createCollection(workspace, "Col");
+    const { workspace: w2, folderId } = createFolder(w1, collectionId, "Fol");
+    const { workspace: w3 } = createRequest(w2, { collectionId, folderId }, "Req", sampleRequestConfig({
+      variables: [customVar],
+      auth: { type: "bearer", token: "token" },
+    }));
+
+    // Inject custom vars and auth on collection and folder manually
+    const col = w3.collections[0]!;
+    col.variables = [customVar];
+    col.auth = customAuth;
+    const fol = col.items[0]!;
+    if (fol.type === "folder") {
+      fol.variables = [customVar];
+      fol.auth = customAuth;
+    }
+
+    const persisted = serializeWorkspace(w3);
+    const result = deserializeWorkspace(persisted);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const resCol = result.workspace.collections[0]!;
+      expect(resCol.variables).toEqual([customVar]);
+      expect(resCol.auth).toEqual(customAuth);
+
+      const resFol = resCol.items[0]!;
+      expect(resFol && "variables" in resFol && resFol.variables).toEqual([customVar]);
+      expect(resFol && "auth" in resFol && resFol.auth).toEqual(customAuth);
+
+      const resReq = resFol && "items" in resFol && resFol.items[0]!;
+      expect(resReq && "request" in resReq && resReq.request.variables).toEqual([customVar]);
+      expect(resReq && "request" in resReq && resReq.request.auth).toEqual({ type: "bearer", token: "token" });
+    }
+  });
+});

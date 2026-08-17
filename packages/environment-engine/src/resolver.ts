@@ -1,4 +1,4 @@
-import type { Environment } from "./types.ts";
+import type { Environment, Variable } from "./types.ts";
 
 /**
  * Syntax: `{{name}}` where `name` is `[A-Za-z_][A-Za-z0-9_]*`. No whitespace
@@ -88,6 +88,15 @@ export function buildVariableContext(environment: Environment | null | undefined
   const context: Record<string, string> = Object.create(null) as Record<string, string>;
   if (!environment) return context;
   for (const variable of environment.variables) {
+    if (variable.enabled) context[variable.key] = variable.value;
+  }
+  return context;
+}
+
+export function buildVariableContextFromVariables(variables: Variable[] | null | undefined): Record<string, string> {
+  const context: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (!variables) return context;
+  for (const variable of variables) {
     if (variable.enabled) context[variable.key] = variable.value;
   }
   return context;

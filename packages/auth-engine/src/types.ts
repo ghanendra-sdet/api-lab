@@ -7,6 +7,7 @@
  */
 export type AuthConfig =
   | { type: "none" }
+  | { type: "inherit" }
   | { type: "apiKey"; key: string; value: string; addTo: "header" | "query" }
   | { type: "basic"; username: string; password: string }
   | { type: "bearer"; token: string }
@@ -18,12 +19,14 @@ export type AuthConfig =
 
 export type AuthType = AuthConfig["type"];
 
-export const AUTH_TYPES: readonly AuthType[] = ["none", "apiKey", "basic", "bearer", "jwt", "oauth2"] as const;
+export const AUTH_TYPES: readonly AuthType[] = ["none", "inherit", "apiKey", "basic", "bearer", "jwt", "oauth2"] as const;
 
 export function createDefaultAuthConfig(type: AuthType): AuthConfig {
   switch (type) {
     case "none":
       return { type: "none" };
+    case "inherit":
+      return { type: "inherit" };
     case "apiKey":
       return { type: "apiKey", key: "", value: "", addTo: "header" };
     case "basic":

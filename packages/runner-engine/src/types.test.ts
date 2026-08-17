@@ -48,4 +48,25 @@ describe("mergeResolutionContext", () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     void merged;
   });
+
+  it("resolves and shadows variables in hierarchical order (Global < Environment < Collection < Folder < Request < Runtime < Iteration)", () => {
+    const scopes = {
+      global: { foo: "global", bar: "global", baz: "global", qux: "global", quux: "global", corge: "global", grault: "global" },
+      environment: { bar: "env", baz: "env", qux: "env", quux: "env", corge: "env", grault: "env" },
+      collection: { baz: "col", qux: "col", quux: "col", corge: "col", grault: "col" },
+      folder: { qux: "fol", quux: "fol", corge: "fol", grault: "fol" },
+      request: { quux: "req", corge: "req", grault: "req" },
+      runtime: { corge: "run", grault: "run" },
+      iteration: { grault: "iter" },
+    };
+
+    const merged = mergeResolutionContext(scopes);
+    expect(merged.foo).toBe("global");
+    expect(merged.bar).toBe("env");
+    expect(merged.baz).toBe("col");
+    expect(merged.qux).toBe("fol");
+    expect(merged.quux).toBe("req");
+    expect(merged.corge).toBe("run");
+    expect(merged.grault).toBe("iter");
+  });
 });

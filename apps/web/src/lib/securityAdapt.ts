@@ -42,6 +42,7 @@ import { prepareRequest, type ExecutionScopes } from "./executeRequest";
 export function authPlacementFor(config: AuthConfig): AuthPlacement {
   switch (config.type) {
     case "none":
+    case "inherit":
     case "oauth2":
       return { kind: "none" };
 

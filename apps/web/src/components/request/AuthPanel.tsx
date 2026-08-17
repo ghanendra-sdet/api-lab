@@ -5,6 +5,7 @@ import type { RequestTabState } from "../../types";
 
 const AUTH_LABELS: Record<AuthType, string> = {
   none: "No Auth",
+  inherit: "Inherit from parent",
   apiKey: "API Key",
   basic: "Basic Auth",
   bearer: "Bearer Token",

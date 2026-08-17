@@ -76,4 +76,11 @@ describe("applyAuth", () => {
     expect(result.headers.find((h) => h.key === "X-Custom")).toBeDefined();
     expect(result.headers).toHaveLength(2);
   });
+
+  it("Inherit Auth adds nothing and leaves existing headers untouched", () => {
+    const headers = [row("X-Custom", "1")];
+    const result = applyAuth({ type: "inherit" }, headers, []);
+    expect(result.headers).toEqual(headers);
+    expect(result.params).toEqual([]);
+  });
 });

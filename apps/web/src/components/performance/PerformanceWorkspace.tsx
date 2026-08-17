@@ -42,7 +42,8 @@ const FIELD_CLASS =
 const LABEL_CLASS = "mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400";
 
 export function PerformanceWorkspace() {
-  const collections = useAppStore((s) => s.workspace.collections);
+  const workspace = useAppStore((s) => s.workspace);
+  const collections = workspace.collections;
   const environments = useAppStore((s) => s.environments.environments);
 
   const config = usePerfStore((s) => s.config);
@@ -120,7 +121,7 @@ export function PerformanceWorkspace() {
       return null;
     }
 
-    const built = buildPerfSpecs(selectedRequests, environment);
+    const built = buildPerfSpecs(selectedRequests, environment, workspace);
     if (!built.ok) {
       setFormError(built.error);
       return null;

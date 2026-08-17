@@ -10,7 +10,14 @@ export function createEmptyTab(overrides: Partial<RequestTabState> = {}): Reques
     activePanel: "params",
     params: [],
     headers: [],
-    auth: { type: "none" },
+    // D.1 Step 5: a brand-new request defaults to inheriting auth from its
+    // (eventual) containing Folder/Collection, not "No Auth" — see
+    // `authInheritance.ts`. This is the *creation-time* default only; it
+    // is a distinct mechanism from `workspace-engine/schema.ts`'s
+    // deserialization default, which stays `{type:"none"}` so that
+    // existing persisted requests with no `auth` field at all keep
+    // resolving as "No Auth", exactly as before.
+    auth: { type: "inherit" },
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",

@@ -30,6 +30,7 @@ import {
 } from "@api-lab/workspace-engine";
 import {
   addVariable as envAddVariable,
+  buildVariableContextFromVariables,
   createEmptyEnvironmentWorkspace,
   createEnvironment as envCreateEnvironment,
   deleteEnvironment as envDeleteEnvironment,
@@ -63,6 +64,7 @@ import {
   type ExecutionScopes,
 } from "../lib/executeRequest";
 import type { ScriptResult } from "@api-lab/script-engine";
+import { findRequestLocation, resolveContainers } from "../lib/workspaceLookup";
 import { findSpecificationForCollection, getContractModel, useContractStore } from "./useContractStore";
 import {
   flattenCollectionRequests,
@@ -87,6 +89,9 @@ import {
   resetHistoryStorage,
   loadRunnerHistoryFromStorage,
   saveRunnerHistoryToStorage,
+  loadGlobalsFromStorage,
+  saveGlobalsToStorage,
+  resetGlobalsStorage,
 } from "../lib/persistence";
 
 
@@ -102,6 +107,8 @@ interface InitialState {
   workspaceLoadError: string | null;
   environments: EnvironmentWorkspace;
   environmentsLoadError: string | null;
+  globals: Variable[];
+  globalsLoadError: string | null;
   tabs: RequestTabState[];
   activeTabId: string;
   history: HistoryItem[];
@@ -123,6 +130,10 @@ function loadInitialState(): InitialState {
     environmentsResult.status === "ok" ? environmentsResult.data : createEmptyEnvironmentWorkspace();
   const environmentsLoadError = environmentsResult.status === "error" ? environmentsResult.detail : null;
 
+  const globalsResult = loadGlobalsFromStorage();
+  const globals = globalsResult.status === "ok" ? globalsResult.variables : [];
+  const globalsLoadError = globalsResult.status === "error" ? globalsResult.detail : null;
+
   const history = loadHistoryFromStorage();
   const runnerHistory = loadRunnerHistoryFromStorage();
 
@@ -133,6 +144,8 @@ function loadInitialState(): InitialState {
       workspaceLoadError,
       environments,
       environmentsLoadError,
+      globals,
+      globalsLoadError,
       tabs: persistedTabs.tabs,
       activeTabId: persistedTabs.activeTabId,
       history,
@@ -146,6 +159,8 @@ function loadInitialState(): InitialState {
     workspaceLoadError,
     environments,
     environmentsLoadError,
+    globals,
+    globalsLoadError,
     tabs: [tab],
     activeTabId: tab.id,
     history,
@@ -188,6 +203,17 @@ interface AppState {
     patch: Partial<Pick<Variable, "key" | "value" | "enabled" | "secret">>,
   ) => void;
   removeVariable: (environmentId: string, variableId: string) => void;
+
+  // Global variables
+  globals: Variable[];
+  globalsLoadError: string | null;
+  resetGlobals: () => void;
+  addGlobalVariable: () => string;
+  updateGlobalVariable: (
+    variableId: string,
+    patch: Partial<Pick<Variable, "key" | "value" | "enabled" | "secret">>,
+  ) => void;
+  removeGlobalVariable: (variableId: string) => void;
 
   // Workspace: collections / folders / saved requests
   workspace: Workspace;
@@ -500,6 +526,13 @@ async function executeRequestWithDependencies(
   executed: Set<string>,
   onStepStart?: (id: string, name: string) => void,
   onStepEnd?: (id: string, name: string, outcome: ExecuteRequestResult) => void,
+  // D.1 Step 5: the target's own containing Collection/Folder, when known
+  // (e.g. an open tab's `savedLocation`). Not always resolvable from
+  // `workspace` alone — an unsaved tab's id is never a real `SavedRequest`
+  // id in the tree — so the caller supplies it explicitly for the target
+  // step only. Prerequisite steps are always saved requests, so their
+  // location is looked up from `workspace` directly (see the loop below).
+  targetLocation?: RequestLocation,
 ): Promise<ExecuteRequestResult> {
   const dependencyMap = buildDependencyMap(workspace);
   dependencyMap[targetId] = targetConfig.dependsOn || [];
@@ -544,10 +577,12 @@ async function executeRequestWithDependencies(
     const isTarget = id === targetId;
     let name: string;
     let config: RequestConfig;
+    let location: RequestLocation | undefined;
 
     if (isTarget) {
       name = targetName;
       config = targetConfig;
+      location = targetLocation;
     } else {
       const saved = findSavedRequest(workspace, id);
       if (!saved) {
@@ -558,7 +593,20 @@ async function executeRequestWithDependencies(
       }
       name = saved.name;
       config = saved.request;
+      location = findRequestLocation(workspace, id);
     }
+
+    // D.1 Step 5: resolve this step's containing Folder/Collection so
+    // variable and auth inheritance can be layered in below — recomputed
+    // per step, since a dependency chain can (in principle) cross
+    // collections/folders even though the common case does not.
+    const { collection, folder } = resolveContainers(workspace, location);
+    const containerScopes: Pick<ExecutionScopes, "collection" | "folder" | "collectionAuth" | "folderAuth"> = {
+      collection: buildVariableContextFromVariables(collection?.variables),
+      folder: buildVariableContextFromVariables(folder?.variables),
+      collectionAuth: collection?.auth,
+      folderAuth: folder?.auth,
+    };
 
     if (executed.size > 0 && scopes.delayMs && scopes.delayMs > 0) {
       try {
@@ -579,7 +627,7 @@ async function executeRequestWithDependencies(
       id,
       name,
       config,
-      { ...scopes, runtime: currentRuntime },
+      { ...scopes, ...containerScopes, runtime: currentRuntime },
       signal,
       isTarget ? contractOptions : undefined,
     );
@@ -678,6 +726,43 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ environments: envUpdateVariable(s.environments, environmentId, variableId, patch) })),
   removeVariable: (environmentId, variableId) =>
     set((s) => ({ environments: envRemoveVariable(s.environments, environmentId, variableId) })),
+
+  globals: initial.globals,
+  globalsLoadError: initial.globalsLoadError,
+  resetGlobals: () => {
+    resetGlobalsStorage();
+    set({ globals: [], globalsLoadError: null });
+  },
+  addGlobalVariable: () => {
+    const id = createId("var");
+    const newVar: Variable = {
+      id,
+      key: "",
+      value: "",
+      enabled: true,
+      secret: false,
+    };
+    set((s) => {
+      const next = [...s.globals, newVar];
+      saveGlobalsToStorage(next);
+      return { globals: next };
+    });
+    return id;
+  },
+  updateGlobalVariable: (variableId, patch) => {
+    set((s) => {
+      const next = s.globals.map((v) => (v.id === variableId ? { ...v, ...patch } : v));
+      saveGlobalsToStorage(next);
+      return { globals: next };
+    });
+  },
+  removeGlobalVariable: (variableId) => {
+    set((s) => {
+      const next = s.globals.filter((v) => v.id !== variableId);
+      saveGlobalsToStorage(next);
+      return { globals: next };
+    });
+  },
 
   workspace: initial.workspace,
   workspaceLoadError: initial.workspaceLoadError,
@@ -1044,11 +1129,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       tab.savedRequestId || tab.id,
       tab.name,
       tabToRequestConfig(tab),
-      { environment: activeEnvironment, runtime: state.tabRuntimeVariables[tabId] ?? {} },
+      {
+        environment: activeEnvironment,
+        global: buildVariableContextFromVariables(state.globals),
+        runtime: state.tabRuntimeVariables[tabId] ?? {},
+      },
       controller.signal,
       contract.options,
       state.workspace,
       executed,
+      undefined,
+      undefined,
+      tab.savedLocation,
     );
 
     // Coverage counts operations that were actually exercised this session
@@ -1248,7 +1340,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           req.id,
           req.name,
           req.request,
-          { environment, runtime, iteration: iterationData, delayMs: state.runnerDelayMs },
+          {
+            environment,
+            global: buildVariableContextFromVariables(state.globals),
+            runtime,
+            iteration: iterationData,
+            delayMs: state.runnerDelayMs,
+          },
           controller.signal,
           contract.options,
           state.workspace,
@@ -1281,7 +1379,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             if (stepOutcome.ok && stepOutcome.extractedVariables) {
               runtime = { ...runtime, ...stepOutcome.extractedVariables };
             }
-          }
+          },
+          req.location,
         );
 
         if (controller.signal.aborted) break outer;

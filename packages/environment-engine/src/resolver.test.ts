@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDisplayVariableContext, buildVariableContext, resolveVariables } from "./resolver.ts";
+import { buildDisplayVariableContext, buildVariableContext, buildVariableContextFromVariables, resolveVariables } from "./resolver.ts";
 import type { Environment } from "./types.ts";
 
 describe("resolveVariables", () => {
@@ -161,5 +161,21 @@ describe("buildDisplayVariableContext", () => {
     };
     const result = resolveVariables("Bearer {{token}}", buildDisplayVariableContext(environment));
     expect(result.value).not.toContain("super-secret-value");
+  });
+});
+
+describe("buildVariableContextFromVariables", () => {
+  it("returns empty context for null or empty variable arrays", () => {
+    expect(buildVariableContextFromVariables(null)).toEqual({});
+    expect(buildVariableContextFromVariables(undefined)).toEqual({});
+    expect(buildVariableContextFromVariables([])).toEqual({});
+  });
+
+  it("filters out disabled variables and builds a key-value record", () => {
+    const variables = [
+      { id: "v1", key: "url", value: "http://api", enabled: true, secret: false },
+      { id: "v2", key: "pwd", value: "secret", enabled: false, secret: true },
+    ];
+    expect(buildVariableContextFromVariables(variables)).toEqual({ url: "http://api" });
   });
 });

@@ -5,8 +5,10 @@ import {
   validateTargetUrl,
   type PerfRequestSpec,
 } from "@api-lab/performance-engine";
-import type { RequestConfig } from "@api-lab/workspace-engine";
+import type { RequestConfig, RequestLocation, Workspace } from "@api-lab/workspace-engine";
 import { resolveAuthConfig } from "./authResolve";
+import { resolveInheritedAuth } from "./authInheritance";
+import { resolveContainers } from "./workspaceLookup";
 import type { RunnableRequest } from "./runner";
 
 export type BuildSpecsResult =
@@ -42,7 +44,16 @@ export type BuildSpecsResult =
  * The saved request is never mutated (spec §10) — `resolveRequestConfig`
  * returns a copy and the originals keep their `{{name}}` expressions.
  */
-export function buildPerfSpecs(requests: RunnableRequest[], environment: Environment | undefined): BuildSpecsResult {
+export function buildPerfSpecs(
+  requests: RunnableRequest[],
+  environment: Environment | undefined,
+  // Optional/defaulted so pre-Step-5 callers (and this file's own existing
+  // tests, which don't exercise inheritance) keep compiling unchanged — an
+  // empty workspace simply means `resolveContainers` finds no Folder/
+  // Collection, so an `{type:"inherit"}` request auth falls back to "none",
+  // exactly as it unconditionally did before Step 5.
+  workspace: Workspace = { collections: [] },
+): BuildSpecsResult {
   const context = buildVariableContext(environment);
 
   // The set of runtime variables this run can ever produce is known before
@@ -59,7 +70,7 @@ export function buildPerfSpecs(requests: RunnableRequest[], environment: Environ
 
   const specs: PerfRequestSpec[] = [];
   for (const runnable of requests) {
-    const built = buildOne(runnable.id, runnable.name, runnable.request, context, produced);
+    const built = buildOne(runnable.id, runnable.name, runnable.request, runnable.location, workspace, context, produced);
     if (!built.ok) return built;
     specs.push(built.spec);
   }
@@ -73,6 +84,8 @@ function buildOne(
   id: string,
   name: string,
   config: RequestConfig,
+  location: RequestLocation,
+  workspace: Workspace,
   context: Record<string, string>,
   produced: ReadonlySet<string>,
 ): BuildOneResult {
@@ -85,7 +98,13 @@ function buildOne(
     return { ok: false, error: `"${name}" has a circular variable reference. Fix the environment before running a load test.` };
   }
 
-  const authResolution = resolveAuthConfig(config.auth, context);
+  // D.1 Step 5: same inheritance resolution as the request/runner pipeline
+  // (see executeRequest.ts) — the containing Folder/Collection's auth is
+  // consulted only when this request's own auth is `{type:"inherit"}`.
+  const { collection, folder } = resolveContainers(workspace, location);
+  const inheritedAuth = resolveInheritedAuth(config.auth, folder?.auth, collection?.auth);
+
+  const authResolution = resolveAuthConfig(inheritedAuth, context);
   if (authResolution.hasCircularReference) {
     return { ok: false, error: `"${name}" has a circular variable reference in its authorization configuration.` };
   }
@@ -143,7 +162,9 @@ function buildOne(
       url: mask(resolution.resolved.url),
       queryParams: withAuth.params.map((row) => ({ ...row, key: mask(row.key), value: mask(row.value) })),
       headers: withAuth.headers.map((row) => ({ ...row, key: mask(row.key), value: mask(row.value) })),
-      authType: config.auth.type,
+      // See executeRequest.ts's identical comment: resolveInheritedAuth
+      // never actually returns "inherit"; this is a defensive fallback only.
+      authType: inheritedAuth.type === "inherit" ? "none" : inheritedAuth.type,
       bodyMode: config.bodyMode,
       bodyRawFormat: config.bodyRawFormat,
       bodyRawContent: mask(resolution.resolved.bodyRawContent),

@@ -14,6 +14,7 @@ export function sampleRequestConfig(overrides: Partial<RequestConfig> = {}): Req
     extractions: [],
     preRequestScript: "",
     postResponseScript: "",
+    variables: [],
     ...overrides,
   };
 }

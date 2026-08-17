@@ -16,6 +16,8 @@ export function createFolder(
     items: [],
     createdAt: now,
     updatedAt: now,
+    variables: [],
+    auth: { type: "inherit" },
   };
   const next = replaceCollection(workspace, collectionId, (c) => ({
     ...c,

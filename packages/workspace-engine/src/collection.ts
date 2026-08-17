@@ -13,6 +13,8 @@ export function createCollection(
     items: [],
     createdAt: now,
     updatedAt: now,
+    variables: [],
+    auth: { type: "none" },
   };
   return {
     workspace: { ...workspace, collections: [...workspace.collections, collection] },
