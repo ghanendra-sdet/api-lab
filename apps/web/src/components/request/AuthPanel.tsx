@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AUTH_TYPES, createDefaultAuthConfig, type AuthType } from "@api-lab/auth-engine";
+import { AUTH_TYPES, createDefaultAuthConfig, type AuthType, type AuthConfig } from "@api-lab/auth-engine";
 import { useAppStore } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
 
@@ -28,16 +28,21 @@ function textInputClass() {
   return "w-full rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm font-mono hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700";
 }
 
-export function AuthPanel({ tab }: { tab: RequestTabState }) {
-  const setAuth = useAppStore((s) => s.setAuth);
+interface AuthFieldsEditorProps {
+  auth: AuthConfig;
+  onChange: (auth: AuthConfig) => void;
+  showInherit?: boolean;
+}
+
+export function AuthFieldsEditor({ auth, onChange, showInherit = false }: AuthFieldsEditorProps) {
   const [showSecrets, setShowSecrets] = useState(false);
-  const auth = tab.auth;
 
   function handleTypeChange(type: AuthType) {
-    setAuth(tab.id, createDefaultAuthConfig(type));
+    onChange(createDefaultAuthConfig(type));
   }
 
   const secretFieldType = showSecrets ? "text" : "password";
+  const allowedTypes = showInherit ? AUTH_TYPES : AUTH_TYPES.filter((t) => t !== "inherit");
 
   return (
     <div className="max-w-md p-4">
@@ -53,7 +58,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
         onChange={(e) => handleTypeChange(e.target.value as AuthType)}
         className="w-full rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
       >
-        {AUTH_TYPES.map((type) => (
+        {allowedTypes.map((type) => (
           <option key={type} value={type}>
             {AUTH_LABELS[type]}
           </option>
@@ -62,7 +67,13 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
 
       {auth.type === "none" && (
         <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-          This request does not use any authorization.
+          This item does not use any authorization.
+        </p>
+      )}
+
+      {auth.type === "inherit" && (
+        <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+          This item inherits authorization from its parent.
         </p>
       )}
 
@@ -95,7 +106,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
             id="auth-apikey-key"
             type="text"
             value={auth.key}
-            onChange={(e) => setAuth(tab.id, { ...auth, key: e.target.value })}
+            onChange={(e) => onChange({ ...auth, key: e.target.value })}
             placeholder="X-API-Key"
             spellCheck={false}
             className={textInputClass()}
@@ -105,7 +116,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
             id="auth-apikey-value"
             type={secretFieldType}
             value={auth.value}
-            onChange={(e) => setAuth(tab.id, { ...auth, value: e.target.value })}
+            onChange={(e) => onChange({ ...auth, value: e.target.value })}
             placeholder="{{apiKey}}"
             spellCheck={false}
             autoComplete="off"
@@ -115,7 +126,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
           <select
             id="auth-apikey-addto"
             value={auth.addTo}
-            onChange={(e) => setAuth(tab.id, { ...auth, addTo: e.target.value as "header" | "query" })}
+            onChange={(e) => onChange({ ...auth, addTo: e.target.value as "header" | "query" })}
             className="w-full rounded border border-neutral-200 bg-white px-2 py-1.5 text-sm hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
           >
             <option value="header">Header</option>
@@ -131,7 +142,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
             id="auth-basic-username"
             type="text"
             value={auth.username}
-            onChange={(e) => setAuth(tab.id, { ...auth, username: e.target.value })}
+            onChange={(e) => onChange({ ...auth, username: e.target.value })}
             placeholder="{{username}}"
             spellCheck={false}
             className={textInputClass()}
@@ -141,7 +152,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
             id="auth-basic-password"
             type={secretFieldType}
             value={auth.password}
-            onChange={(e) => setAuth(tab.id, { ...auth, password: e.target.value })}
+            onChange={(e) => onChange({ ...auth, password: e.target.value })}
             placeholder="{{password}}"
             spellCheck={false}
             autoComplete="off"
@@ -157,7 +168,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
             id="auth-token"
             type={secretFieldType}
             value={auth.token}
-            onChange={(e) => setAuth(tab.id, { ...auth, token: e.target.value })}
+            onChange={(e) => onChange({ ...auth, token: e.target.value })}
             placeholder={auth.type === "jwt" ? "{{jwt}}" : "{{token}}"}
             spellCheck={false}
             autoComplete="off"
@@ -166,7 +177,7 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
         </>
       )}
 
-      {auth.type !== "none" && auth.type !== "oauth2" && (
+      {auth.type !== "none" && auth.type !== "inherit" && auth.type !== "oauth2" && (
         <p className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">
           Fields support <code className="font-mono">{"{{variables}}"}</code> from the active environment,
           resolved at send time. A manually added header/param with the same name is overridden by this
@@ -174,5 +185,18 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
         </p>
       )}
     </div>
+  );
+}
+
+export function AuthPanel({ tab }: { tab: RequestTabState }) {
+  const setAuth = useAppStore((s) => s.setAuth);
+  const auth = tab.auth;
+
+  return (
+    <AuthFieldsEditor
+      auth={auth}
+      onChange={(newAuth) => setAuth(tab.id, newAuth)}
+      showInherit={true}
+    />
   );
 }

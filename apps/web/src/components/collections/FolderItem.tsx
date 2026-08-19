@@ -3,6 +3,7 @@ import type { Folder } from "@api-lab/workspace-engine";
 import { useAppStore } from "../../store/useAppStore";
 import { RequestItem } from "./RequestItem";
 import { RunnerDialog } from "../runner/RunnerDialog";
+import { FolderSettingsDialog } from "./FolderSettingsDialog";
 
 interface FolderItemProps {
   collectionId: string;
@@ -12,6 +13,7 @@ interface FolderItemProps {
 export function FolderItem({ collectionId, folder }: FolderItemProps) {
   const [expanded, setExpanded] = useState(true);
   const [runnerOpen, setRunnerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const panelId = `folder-panel-${folder.id}`;
   const collection = useAppStore((s) => s.workspace.collections.find((c) => c.id === collectionId));
   const renameFolder = useAppStore((s) => s.renameFolder);
@@ -82,6 +84,15 @@ export function FolderItem({ collectionId, folder }: FolderItemProps) {
           </button>
           <button
             type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label={`Settings for ${folder.name}`}
+            title="Folder Settings"
+            className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            ⚙
+          </button>
+          <button
+            type="button"
             onClick={handleDelete}
             aria-label={`Delete ${folder.name}`}
             className="rounded px-1 text-xs text-neutral-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
@@ -106,6 +117,13 @@ export function FolderItem({ collectionId, folder }: FolderItemProps) {
           collection={collection}
           folderId={folder.id}
           onClose={() => setRunnerOpen(false)}
+        />
+      )}
+      {settingsOpen && (
+        <FolderSettingsDialog
+          collectionId={collectionId}
+          folder={folder}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </li>

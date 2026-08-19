@@ -19,6 +19,10 @@ import {
   renameFolder as wsRenameFolder,
   renameRequest as wsRenameRequest,
   updateRequestConfig as wsUpdateRequestConfig,
+  updateCollectionVariables as wsUpdateCollectionVariables,
+  updateCollectionAuth as wsUpdateCollectionAuth,
+  updateFolderVariables as wsUpdateFolderVariables,
+  updateFolderAuth as wsUpdateFolderAuth,
   isFolder,
   isRequest,
   resolveDependencyOrder,
@@ -225,10 +229,14 @@ interface AppState {
   deleteCollection: (collectionId: string) => void;
   moveCollectionUp: (collectionId: string) => void;
   moveCollectionDown: (collectionId: string) => void;
+  updateCollectionVariables: (collectionId: string, variables: Variable[]) => void;
+  updateCollectionAuth: (collectionId: string, auth: AuthConfig) => void;
 
   createFolder: (collectionId: string, name: string) => string;
   renameFolder: (collectionId: string, folderId: string, name: string) => void;
   deleteFolder: (collectionId: string, folderId: string) => void;
+  updateFolderVariables: (collectionId: string, folderId: string, variables: Variable[]) => void;
+  updateFolderAuth: (collectionId: string, folderId: string, auth: AuthConfig) => void;
 
   renameSavedRequest: (location: RequestLocation, requestId: string, name: string) => void;
   deleteSavedRequest: (location: RequestLocation, requestId: string) => void;
@@ -792,6 +800,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ workspace: wsMoveCollectionUp(s.workspace, collectionId) })),
   moveCollectionDown: (collectionId) =>
     set((s) => ({ workspace: wsMoveCollectionDown(s.workspace, collectionId) })),
+  updateCollectionVariables: (collectionId, variables) =>
+    set((s) => ({ workspace: wsUpdateCollectionVariables(s.workspace, collectionId, variables) })),
+  updateCollectionAuth: (collectionId, auth) =>
+    set((s) => ({ workspace: wsUpdateCollectionAuth(s.workspace, collectionId, auth) })),
 
   createFolder: (collectionId, name) => {
     const { workspace, folderId } = wsCreateFolder(get().workspace, collectionId, name);
@@ -809,6 +821,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           : tab,
       ),
     })),
+  updateFolderVariables: (collectionId, folderId, variables) =>
+    set((s) => ({ workspace: wsUpdateFolderVariables(s.workspace, collectionId, folderId, variables) })),
+  updateFolderAuth: (collectionId, folderId, auth) =>
+    set((s) => ({ workspace: wsUpdateFolderAuth(s.workspace, collectionId, folderId, auth) })),
 
   renameSavedRequest: (location, requestId, name) =>
     set((s) => ({

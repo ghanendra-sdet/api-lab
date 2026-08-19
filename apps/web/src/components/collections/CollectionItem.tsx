@@ -6,6 +6,7 @@ import { downloadJson, slugifyFilename } from "../../lib/importExport";
 import { RequestItem } from "./RequestItem";
 import { FolderItem } from "./FolderItem";
 import { RunnerDialog } from "../runner/RunnerDialog";
+import { CollectionSettingsDialog } from "./CollectionSettingsDialog";
 
 interface CollectionItemProps {
   collection: Collection;
@@ -14,6 +15,7 @@ interface CollectionItemProps {
 export function CollectionItem({ collection }: CollectionItemProps) {
   const [expanded, setExpanded] = useState(true);
   const [runnerOpen, setRunnerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const panelId = `collection-panel-${collection.id}`;
   const renameCollection = useAppStore((s) => s.renameCollection);
   const deleteCollection = useAppStore((s) => s.deleteCollection);
@@ -128,6 +130,15 @@ export function CollectionItem({ collection }: CollectionItemProps) {
           </button>
           <button
             type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label={`Settings for ${collection.name}`}
+            title="Collection Settings"
+            className="rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            ⚙
+          </button>
+          <button
+            type="button"
             onClick={handleDelete}
             aria-label={`Delete ${collection.name}`}
             className="rounded px-1 text-xs text-neutral-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
@@ -154,6 +165,9 @@ export function CollectionItem({ collection }: CollectionItemProps) {
         </ul>
       )}
       {runnerOpen && <RunnerDialog collection={collection} onClose={() => setRunnerOpen(false)} />}
+      {settingsOpen && (
+        <CollectionSettingsDialog collection={collection} onClose={() => setSettingsOpen(false)} />
+      )}
     </li>
   );
 }

@@ -1,6 +1,8 @@
 import type { Folder, Workspace } from "./types.ts";
 import { createWorkspaceId } from "./id.ts";
 import { findCollection, isFolder, replaceCollection, touch } from "./internal.ts";
+import type { AuthConfig } from "@api-lab/auth-engine";
+import type { Variable } from "@api-lab/environment-engine";
 
 export function createFolder(
   workspace: Workspace,
@@ -44,6 +46,36 @@ export function deleteFolder(workspace: Workspace, collectionId: string, folderI
   return replaceCollection(workspace, collectionId, (c) => ({
     ...c,
     items: c.items.filter((item) => !(isFolder(item) && item.id === folderId)),
+    updatedAt: touch(),
+  }));
+}
+
+export function updateFolderVariables(
+  workspace: Workspace,
+  collectionId: string,
+  folderId: string,
+  variables: Variable[],
+): Workspace {
+  return replaceCollection(workspace, collectionId, (c) => ({
+    ...c,
+    items: c.items.map((item) =>
+      isFolder(item) && item.id === folderId ? { ...item, variables, updatedAt: touch() } : item,
+    ),
+    updatedAt: touch(),
+  }));
+}
+
+export function updateFolderAuth(
+  workspace: Workspace,
+  collectionId: string,
+  folderId: string,
+  auth: AuthConfig,
+): Workspace {
+  return replaceCollection(workspace, collectionId, (c) => ({
+    ...c,
+    items: c.items.map((item) =>
+      isFolder(item) && item.id === folderId ? { ...item, auth, updatedAt: touch() } : item,
+    ),
     updatedAt: touch(),
   }));
 }
