@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * D.1 Phase 1 Step 5 integration tests: hierarchical variable resolution
  * (7-layer precedence) and authentication inheritance, exercised through
