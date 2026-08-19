@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTabDirty } from "./requestConfig";
+import { isTabDirty, tabToRequestConfig, requestConfigToTabFields } from "./requestConfig";
 import { createEmptyTab } from "./seedData";
 
 describe("isTabDirty", () => {
@@ -61,3 +61,64 @@ describe("isTabDirty", () => {
     expect(isTabDirty(tab)).toBe(true);
   });
 });
+
+describe("requestConfig mapping and backward compatibility", () => {
+  it("serializes form-data and urlencoded tabs into bodyRawContent JSON string", () => {
+    const tab = createEmptyTab({
+      bodyMode: "form-data",
+      bodyFormData: [
+        { type: "text", key: "foo", value: "bar", enabled: true },
+        { type: "file", key: "fileField", file: { name: "test.txt" }, enabled: true },
+      ],
+    });
+    const config = tabToRequestConfig(tab);
+    expect(config.bodyRawContent).toBe(
+      JSON.stringify([
+        { type: "text", key: "foo", value: "bar", enabled: true },
+        { type: "file", key: "fileField", file: { name: "test.txt" }, enabled: true },
+      ])
+    );
+  });
+
+  it("deserializes form-data and urlencoded configurations back to arrays", () => {
+    const serializedFormData = JSON.stringify([
+      { type: "text", key: "hello", value: "world", enabled: true },
+    ]);
+    const config = {
+      method: "POST" as const,
+      url: "https://example.com",
+      params: [],
+      headers: [],
+      auth: { type: "none" as const },
+      bodyMode: "form-data" as const,
+      bodyRawFormat: "JSON" as const,
+      bodyRawContent: serializedFormData,
+      tests: [],
+      extractions: [],
+    };
+    const tabFields = requestConfigToTabFields(config);
+    expect(tabFields.bodyFormData).toEqual([
+      { type: "text", key: "hello", value: "world", enabled: true },
+    ]);
+    expect(tabFields.bodyRawContent).toBe("");
+  });
+
+  it("safely defaults missing form fields for backward compatibility", () => {
+    const legacyConfig = {
+      method: "GET" as const,
+      url: "https://example.com",
+      params: [],
+      headers: [],
+      auth: { type: "none" as const },
+      bodyMode: "none" as const,
+      bodyRawFormat: "JSON" as const,
+      bodyRawContent: "",
+      tests: [],
+      extractions: [],
+    };
+    const tabFields = requestConfigToTabFields(legacyConfig);
+    expect(tabFields.bodyFormData).toEqual([]);
+    expect(tabFields.bodyUrlencoded).toEqual([]);
+  });
+});
+

@@ -4,6 +4,8 @@ import type {
   HttpMethod,
   KeyValueRow,
   RequestPanelId,
+  FormDataField,
+  UrlencodedField,
 } from "@api-lab/shared";
 import type { AuthConfig } from "@api-lab/auth-engine";
 import type { Assertion } from "@api-lab/test-engine";
@@ -37,6 +39,8 @@ export interface RequestTabState {
    * @api-lab/workspace-engine's dependencyGraph.ts. */
   dependsOn: string[];
   variables: Variable[];
+  bodyFormData: FormDataField[];
+  bodyUrlencoded: UrlencodedField[];
 
   /**
    * Set only when this tab is linked to a saved request — undefined means

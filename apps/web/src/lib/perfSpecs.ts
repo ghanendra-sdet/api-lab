@@ -187,7 +187,7 @@ function buildOne(
       method: built.method,
       url: unmask(built.url),
       headers,
-      body: built.body === undefined ? null : unmask(built.body),
+      body: (built.body === undefined || built.body instanceof FormData) ? null : unmask(built.body),
       extractions: config.extractions,
     },
   };

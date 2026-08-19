@@ -134,7 +134,7 @@ export function resolveSecurityRequest(
       url: built.url,
       headers,
       query,
-      body: built.body,
+      body: built.body instanceof FormData ? undefined : built.body,
       contentType: headers.find((header) => header.name.toLowerCase() === "content-type")?.value,
       pathTemplate: operation?.path,
       auth: authPlacementFor(resolvedAuth),

@@ -21,6 +21,8 @@ export function createEmptyTab(overrides: Partial<RequestTabState> = {}): Reques
     bodyMode: "none",
     bodyRawFormat: "JSON",
     bodyRawContent: "",
+    bodyFormData: [],
+    bodyUrlencoded: [],
     preRequestScript: "",
     postResponseScript: "",
     tests: [],

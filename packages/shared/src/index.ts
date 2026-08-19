@@ -58,3 +58,34 @@ export type RequestPanelId =
   | "dependencies";
 
 export type ThemeMode = "light" | "dark";
+
+export interface FormDataFile {
+  name: string;
+  path?: string;
+  reference?: string;
+  mimeType?: string;
+}
+
+export type FormDataField =
+  | {
+      type: "text";
+      key: string;
+      value: string;
+      description?: string;
+      enabled?: boolean;
+    }
+  | {
+      type: "file";
+      key: string;
+      file: FormDataFile;
+      description?: string;
+      enabled?: boolean;
+    };
+
+export interface UrlencodedField {
+  key: string;
+  value: string;
+  description?: string;
+  enabled?: boolean;
+}
+

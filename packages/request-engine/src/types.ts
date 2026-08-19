@@ -22,7 +22,7 @@ export interface BuiltRequest {
   url: string;
   method: HttpMethod;
   headers: Record<string, string>;
-  body: string | undefined;
+  body: string | FormData | undefined;
 }
 
 export interface ValidationError {

@@ -7,7 +7,7 @@ import {
   type BuiltRequest,
   type ValidationError,
 } from "@api-lab/request-engine";
-import { buildVariableContext, buildVariableContextFromVariables, resolveRequestConfig, type Environment } from "@api-lab/environment-engine";
+import { buildVariableContext, buildVariableContextFromVariables, resolveRequestConfig, resolveVariables, type Environment } from "@api-lab/environment-engine";
 import { applyAuth, validateAuthConfig, type AuthConfig } from "@api-lab/auth-engine";
 import { evaluateAssertions, buildTestResult, type TestResult } from "@api-lab/test-engine";
 import { extractAll, mergeResolutionContext, type ExtractionResult } from "@api-lab/runner-engine";
@@ -142,12 +142,91 @@ export function prepareRequest(
     iteration: scopes.iteration ?? {},
   });
 
+  const unresolvedVariables = new Set<string>();
+  let hasCircularReference = false;
+
   const resolution = resolveRequestConfig(
-    { url: config.url, params: config.params, headers: config.headers, bodyRawContent: config.bodyRawContent },
+    {
+      url: config.url,
+      params: config.params,
+      headers: config.headers,
+      bodyRawContent: config.bodyMode === "raw" ? config.bodyRawContent : "",
+    },
     context,
   );
 
+  resolution.unresolvedVariables.forEach((name) => unresolvedVariables.add(name));
   if (resolution.hasCircularReference) {
+    hasCircularReference = true;
+  }
+
+  const resolved = { ...resolution.resolved };
+
+  if (config.bodyMode === "form-data" && config.bodyRawContent.trim() !== "") {
+    try {
+      const fields = JSON.parse(config.bodyRawContent);
+      if (Array.isArray(fields)) {
+        const resolvedFields = [];
+        for (const field of fields) {
+          if (field.type === "text") {
+            const keyRes = resolveVariables(field.key, context);
+            const valRes = resolveVariables(field.value, context);
+            keyRes.unresolvedVariables.forEach((v) => unresolvedVariables.add(v));
+            valRes.unresolvedVariables.forEach((v) => unresolvedVariables.add(v));
+            if (keyRes.hasCircularReference || valRes.hasCircularReference) {
+              hasCircularReference = true;
+            }
+            resolvedFields.push({
+              ...field,
+              key: keyRes.value,
+              value: valRes.value,
+            });
+          } else if (field.type === "file") {
+            const keyRes = resolveVariables(field.key, context);
+            keyRes.unresolvedVariables.forEach((v) => unresolvedVariables.add(v));
+            if (keyRes.hasCircularReference) {
+              hasCircularReference = true;
+            }
+            resolvedFields.push({
+              ...field,
+              key: keyRes.value,
+            });
+          } else {
+            resolvedFields.push(field);
+          }
+        }
+        resolved.bodyRawContent = JSON.stringify(resolvedFields);
+      }
+    } catch {
+      resolved.bodyRawContent = "";
+    }
+  } else if (config.bodyMode === "x-www-form-urlencoded" && config.bodyRawContent.trim() !== "") {
+    try {
+      const fields = JSON.parse(config.bodyRawContent);
+      if (Array.isArray(fields)) {
+        const resolvedFields = [];
+        for (const field of fields) {
+          const keyRes = resolveVariables(field.key, context);
+          const valRes = resolveVariables(field.value, context);
+          keyRes.unresolvedVariables.forEach((v) => unresolvedVariables.add(v));
+          valRes.unresolvedVariables.forEach((v) => unresolvedVariables.add(v));
+          if (keyRes.hasCircularReference || valRes.hasCircularReference) {
+            hasCircularReference = true;
+          }
+          resolvedFields.push({
+            ...field,
+            key: keyRes.value,
+            value: valRes.value,
+          });
+        }
+        resolved.bodyRawContent = JSON.stringify(resolvedFields);
+      }
+    } catch {
+      resolved.bodyRawContent = "";
+    }
+  }
+
+  if (hasCircularReference) {
     return {
       ok: false,
       validationError: {
@@ -156,17 +235,17 @@ export function prepareRequest(
       },
     };
   }
-  if (resolution.unresolvedVariables.length > 0) {
+  if (unresolvedVariables.size > 0) {
+    const list = [...unresolvedVariables];
     return {
       ok: false,
       validationError: {
         field: "variables",
-        message: `Unresolved variable${resolution.unresolvedVariables.length > 1 ? "s" : ""}: ${resolution.unresolvedVariables.join(", ")}. Select an environment/dataset that defines ${resolution.unresolvedVariables.length > 1 ? "them" : "it"}, or remove the reference.`,
+        message: `Unresolved variable${list.length > 1 ? "s" : ""}: ${list.join(", ")}. Select an environment/dataset that defines ${list.length > 1 ? "them" : "it"}, or remove the reference.`,
       },
     };
   }
 
-  const resolved = resolution.resolved;
 
   // D.1 Step 5: resolve `{type:"inherit"}` against the containing
   // Folder/Collection *before* variable interpolation, so a Bearer token
@@ -293,7 +372,7 @@ export async function executeRequestConfig(
         built.url,
         built.headers,
         withAuthParams,
-        built.body,
+        built.body instanceof FormData ? undefined : built.body,
       )
     : null;
 
