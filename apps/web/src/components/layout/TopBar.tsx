@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import { EnvironmentManager } from "../environments/EnvironmentManager";
+import { GlobalVariablesManager } from "../globals/GlobalVariablesManager";
 import { MockServerManager } from "../mock/MockServerManager";
 import { ContractManager } from "../contract/ContractManager";
 import { SecurityManager } from "../security/SecurityManager";
@@ -19,6 +20,7 @@ export function TopBar() {
   const setActiveView = useAppStore((s) => s.setActiveView);
   const environmentsLoadError = useAppStore((s) => s.environmentsLoadError);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [globalsManagerOpen, setGlobalsManagerOpen] = useState(false);
   const [mockManagerOpen, setMockManagerOpen] = useState(false);
   const [contractManagerOpen, setContractManagerOpen] = useState(false);
   const [securityManagerOpen, setSecurityManagerOpen] = useState(false);
@@ -96,6 +98,15 @@ export function TopBar() {
 
         <button
           type="button"
+          onClick={() => setGlobalsManagerOpen(true)}
+          aria-label="Manage global variables"
+          className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+        >
+          <GlobeIcon />
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveView(activeView === "performance" ? "request" : "performance")}
           aria-label="Performance"
           aria-pressed={activeView === "performance"}
@@ -154,6 +165,7 @@ export function TopBar() {
         </button>
       </div>
       {managerOpen && <EnvironmentManager onClose={() => setManagerOpen(false)} />}
+      {globalsManagerOpen && <GlobalVariablesManager onClose={() => setGlobalsManagerOpen(false)} />}
       {mockManagerOpen && <MockServerManager onClose={() => setMockManagerOpen(false)} />}
       {contractManagerOpen && <ContractManager onClose={() => setContractManagerOpen(false)} />}
       {securityManagerOpen && <SecurityManager onClose={() => setSecurityManagerOpen(false)} />}
@@ -178,6 +190,19 @@ function GearIcon() {
       <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
       <path
         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.32.5.66 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M3 12h18M12 3a15 15 0 0 1 4 9 15 15 0 0 1-4 9 15 15 0 0 1-4-9 15 15 0 0 1 4-9z"
         stroke="currentColor"
         strokeWidth="1.5"
       />
