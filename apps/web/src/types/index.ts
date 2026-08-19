@@ -9,6 +9,7 @@ import type { AuthConfig } from "@api-lab/auth-engine";
 import type { Assertion } from "@api-lab/test-engine";
 import type { Extraction } from "@api-lab/runner-engine";
 import type { RequestConfig, RequestLocation } from "@api-lab/workspace-engine";
+import type { Variable } from "@api-lab/environment-engine";
 
 /** The full editable state of one open request tab. */
 export interface RequestTabState {
@@ -35,6 +36,7 @@ export interface RequestTabState {
    * model only so far, no execution wired up yet (Milestone B3.1). See
    * @api-lab/workspace-engine's dependencyGraph.ts. */
   dependsOn: string[];
+  variables: Variable[];
 
   /**
    * Set only when this tab is linked to a saved request — undefined means

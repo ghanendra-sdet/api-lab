@@ -32,6 +32,7 @@ describe("isTabDirty", () => {
         bodyRawContent: "",
         tests: [],
         extractions: [],
+        variables: [],
       },
     });
     expect(isTabDirty(tab)).toBe(false);
@@ -53,6 +54,7 @@ describe("isTabDirty", () => {
         bodyRawContent: "",
         tests: [],
         extractions: [],
+        variables: [],
       },
     });
     tab.url = "https://example.com/changed";

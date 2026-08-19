@@ -6,6 +6,7 @@ import { ParamsPanel } from "./ParamsPanel";
 import { AuthPanel } from "./AuthPanel";
 import { HeadersPanel } from "./HeadersPanel";
 import { BodyPanel } from "./BodyPanel";
+import { VariablesPanel } from "./VariablesPanel";
 import { ScriptsPanel } from "./ScriptsPanel";
 import { TestsPanel } from "./TestsPanel";
 import { ResponsePanel } from "../response/ResponsePanel";
@@ -26,6 +27,7 @@ export function RequestWorkspace() {
           {tab.activePanel === "auth" && <AuthPanel tab={tab} />}
           {tab.activePanel === "headers" && <HeadersPanel tab={tab} />}
           {tab.activePanel === "body" && <BodyPanel tab={tab} />}
+          {tab.activePanel === "variables" && <VariablesPanel tab={tab} />}
           {tab.activePanel === "scripts" && <ScriptsPanel tab={tab} />}
           {tab.activePanel === "tests" && <TestsPanel tab={tab} />}
           {tab.activePanel === "contract" && <ContractPanel tab={tab} />}

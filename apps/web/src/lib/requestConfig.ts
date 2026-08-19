@@ -16,6 +16,7 @@ export function tabToRequestConfig(tab: RequestTabState): RequestConfig {
     preRequestScript: tab.preRequestScript || undefined,
     postResponseScript: tab.postResponseScript || undefined,
     dependsOn: tab.dependsOn.length > 0 ? tab.dependsOn : undefined,
+    variables: tab.variables,
   };
 }
 
@@ -34,6 +35,7 @@ export function requestConfigToTabFields(config: RequestConfig): Partial<Request
     preRequestScript: config.preRequestScript ?? "",
     postResponseScript: config.postResponseScript ?? "",
     dependsOn: config.dependsOn ?? [],
+    variables: config.variables ?? [],
   };
 }
 

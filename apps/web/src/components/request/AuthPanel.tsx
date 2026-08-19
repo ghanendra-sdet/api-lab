@@ -188,15 +188,44 @@ export function AuthFieldsEditor({ auth, onChange, showInherit = false }: AuthFi
   );
 }
 
+import { resolveContainers } from "../../lib/workspaceLookup";
+import { resolveInheritedAuth } from "../../lib/authInheritance";
+
 export function AuthPanel({ tab }: { tab: RequestTabState }) {
   const setAuth = useAppStore((s) => s.setAuth);
+  const workspace = useAppStore((s) => s.workspace);
   const auth = tab.auth;
 
+  let inheritanceInfo = "";
+  if (auth.type === "inherit") {
+    const { collection, folder } = resolveContainers(workspace, tab.savedLocation);
+    const resolvedAuth = resolveInheritedAuth(auth, folder?.auth, collection?.auth);
+
+    if (tab.savedLocation) {
+      if (folder && folder.auth?.type !== "inherit") {
+        inheritanceInfo = `↳ Inherited from folder "${folder.name}" (${AUTH_LABELS[resolvedAuth.type]})`;
+      } else if (collection) {
+        inheritanceInfo = `↳ Inherited from collection "${collection.name}" (${AUTH_LABELS[resolvedAuth.type]})`;
+      } else {
+        inheritanceInfo = `↳ Inherits from parent folder/collection (${AUTH_LABELS[resolvedAuth.type]})`;
+      }
+    } else {
+      inheritanceInfo = "↳ Inherits from parent folder/collection when saved";
+    }
+  }
+
   return (
-    <AuthFieldsEditor
-      auth={auth}
-      onChange={(newAuth) => setAuth(tab.id, newAuth)}
-      showInherit={true}
-    />
+    <div>
+      <AuthFieldsEditor
+        auth={auth}
+        onChange={(newAuth) => setAuth(tab.id, newAuth)}
+        showInherit={true}
+      />
+      {inheritanceInfo && (
+        <div className="mx-4 -mt-2 mb-4 text-xs italic text-neutral-500 dark:text-neutral-400">
+          {inheritanceInfo}
+        </div>
+      )}
+    </div>
   );
 }

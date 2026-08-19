@@ -50,6 +50,7 @@ export type RequestPanelId =
   | "auth"
   | "headers"
   | "body"
+  | "variables"
   | "scripts"
   | "tests"
   /** Milestone 11: OpenAPI contract validation for this request. */

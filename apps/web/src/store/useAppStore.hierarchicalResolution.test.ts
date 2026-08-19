@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * D.1 Phase 1 Step 5 integration tests: hierarchical variable resolution
  * (7-layer precedence) and authentication inheritance, exercised through
@@ -6,19 +5,10 @@
  * `startRunner`/`sendRequest`) → a mocked `fetch` call — not just unit
  * tests of `mergeResolutionContext` or `resolveInheritedAuth` in isolation.
  *
- * The 7-layer variable-precedence tests run through the Collection Runner
- * (`startRunner`) because that is the one execution path that supplies a
- * request's own `RequestConfig.variables` unmodified — the tab-based Send
- * path (`sendRequest`) round-trips through `tabToRequestConfig`, and
- * `RequestTabState` has no `variables` field (Step 8, "Request Local
- * Variables UI", is explicitly out of scope for this milestone) — see this
- * file's last test and the final report's "Remaining defects" section for
- * why that's a pre-existing, documented gap rather than something this
- * suite silently works around.
- *
- * Auth-inheritance tests use whichever of `sendRequest`/`startRunner` best
- * fits the scenario; auth inheritance itself does not depend on tab-only
- * fields, so both paths exercise it faithfully.
+ * In Step 8, the tab-based Send path (`sendRequest`) is fully plumbed to
+ * support request local variables (`RequestTabState.variables`), which
+ * round-trips through `tabToRequestConfig` and participates in variable
+ * precedence resolution.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyEnvironmentWorkspace } from "@api-lab/environment-engine";
@@ -425,8 +415,25 @@ describe("D.1 Step 5 — authentication inheritance (integration)", () => {
     expect(headers.Authorization).toBe("Bearer resolved-secret");
   });
 
-  it("known gap: tab-based Send drops request-local `variables` (RequestTabState has no `variables` field — Step 8 UI is out of scope)", () => {
+  it("now resolved: tab-based Send supports request-local `variables`", () => {
     const tab = createEmptyTab();
-    expect((tab as any).variables).toBeUndefined();
+    expect(tab.variables).toEqual([]);
+  });
+
+  it("resolves request-local variables and transmits them in outgoing request via sendRequest", async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { activeTabId, setTabUrl, setTabVariables, sendRequest } = useAppStore.getState();
+    setTabUrl(activeTabId, "https://example.com/api?val={{myLocalVar}}");
+    setTabVariables(activeTabId, [
+      { id: "v-local", key: "myLocalVar", value: "send-request-local-value", enabled: true, secret: false }
+    ]);
+
+    await sendRequest(activeTabId);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe("https://example.com/api?val=send-request-local-value");
   });
 });

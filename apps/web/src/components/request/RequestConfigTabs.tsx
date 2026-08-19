@@ -7,6 +7,7 @@ const PANELS: { id: RequestPanelId; label: string }[] = [
   { id: "auth", label: "Authorization" },
   { id: "headers", label: "Headers" },
   { id: "body", label: "Body" },
+  { id: "variables", label: "Variables" },
   { id: "scripts", label: "Scripts" },
   { id: "tests", label: "Tests" },
   { id: "contract", label: "Contract" },
