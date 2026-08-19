@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HttpMethod, KeyValueRow, RequestPanelId, ThemeMode } from "@api-lab/shared";
+import type { HttpMethod, KeyValueRow, RequestPanelId, ThemeMode, FormDataField, UrlencodedField } from "@api-lab/shared";
 import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine";
 import {
   createCollection as wsCreateCollection,
@@ -280,6 +280,14 @@ interface AppState {
   updateHeaderRow: (tabId: string, rowId: string, patch: Partial<KeyValueRow>) => void;
   removeHeaderRow: (tabId: string, rowId: string) => void;
 
+  // Form-Data / Urlencoded body row management
+  addBodyFormDataRow: (tabId: string) => void;
+  updateBodyFormDataRow: (tabId: string, rowId: string, patch: Partial<FormDataField>) => void;
+  removeBodyFormDataRow: (tabId: string, rowId: string) => void;
+  addBodyUrlencodedRow: (tabId: string) => void;
+  updateBodyUrlencodedRow: (tabId: string, rowId: string, patch: Partial<UrlencodedField>) => void;
+  removeBodyUrlencodedRow: (tabId: string, rowId: string) => void;
+
   // Auth / Body / Scripts
   setAuth: (tabId: string, auth: AuthConfig) => void;
   setBodyMode: (tabId: string, bodyMode: RequestTabState["bodyMode"]) => void;
@@ -363,6 +371,14 @@ interface AppState {
 }
 
 function newRow(): KeyValueRow {
+  return { id: createId("row"), key: "", value: "", description: "", enabled: true };
+}
+
+function newFormDataRow(): FormDataField {
+  return { id: createId("row"), type: "text", key: "", value: "", description: "", enabled: true };
+}
+
+function newUrlencodedRow(): UrlencodedField {
   return { id: createId("row"), key: "", value: "", description: "", enabled: true };
 }
 
@@ -1053,6 +1069,48 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       tabs: updateTab(s.tabs, tabId, (tab) => ({
         headers: tab.headers.filter((row) => row.id !== rowId),
+      })),
+    })),
+
+  addBodyFormDataRow: (tabId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyFormData: [...(tab.bodyFormData || []), newFormDataRow()],
+      })),
+    })),
+  updateBodyFormDataRow: (tabId, rowId, patch) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyFormData: (tab.bodyFormData || []).map((row) =>
+          row.id === rowId ? ({ ...row, ...patch } as FormDataField) : row
+        ),
+      })),
+    })),
+  removeBodyFormDataRow: (tabId, rowId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyFormData: (tab.bodyFormData || []).filter((row) => row.id !== rowId),
+      })),
+    })),
+
+  addBodyUrlencodedRow: (tabId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyUrlencoded: [...(tab.bodyUrlencoded || []), newUrlencodedRow()],
+      })),
+    })),
+  updateBodyUrlencodedRow: (tabId, rowId, patch) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyUrlencoded: (tab.bodyUrlencoded || []).map((row) =>
+          row.id === rowId ? { ...row, ...patch } : row
+        ),
+      })),
+    })),
+  removeBodyUrlencodedRow: (tabId, rowId) =>
+    set((s) => ({
+      tabs: updateTab(s.tabs, tabId, (tab) => ({
+        bodyUrlencoded: (tab.bodyUrlencoded || []).filter((row) => row.id !== rowId),
       })),
     })),
 

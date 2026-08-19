@@ -68,6 +68,7 @@ export interface FormDataFile {
 
 export type FormDataField =
   | {
+      id?: string;
       type: "text";
       key: string;
       value: string;
@@ -75,6 +76,7 @@ export type FormDataField =
       enabled?: boolean;
     }
   | {
+      id?: string;
       type: "file";
       key: string;
       file: FormDataFile;
@@ -83,6 +85,7 @@ export type FormDataField =
     };
 
 export interface UrlencodedField {
+  id?: string;
   key: string;
   value: string;
   description?: string;

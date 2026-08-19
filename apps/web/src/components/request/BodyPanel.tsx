@@ -1,7 +1,9 @@
 import Editor from "@monaco-editor/react";
-import { BODY_MODES, BODY_RAW_FORMATS, type BodyMode, type BodyRawFormat } from "@api-lab/shared";
+import { BODY_MODES, BODY_RAW_FORMATS, type BodyMode, type BodyRawFormat, type KeyValueRow } from "@api-lab/shared";
 import { useAppStore } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
+import { KeyValueEditor } from "../common/KeyValueEditor";
+import { FormDataEditor } from "./FormDataEditor";
 
 // KNOWN LIMITATION: @monaco-editor/react's default loader fetches Monaco's
 // assets from a CDN (jsdelivr) at runtime instead of the bundled npm package.
@@ -29,6 +31,13 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
   const setBodyRawFormat = useAppStore((s) => s.setBodyRawFormat);
   const setBodyRawContent = useAppStore((s) => s.setBodyRawContent);
   const theme = useAppStore((s) => s.theme);
+
+  const addBodyFormDataRow = useAppStore((s) => s.addBodyFormDataRow);
+  const updateBodyFormDataRow = useAppStore((s) => s.updateBodyFormDataRow);
+  const removeBodyFormDataRow = useAppStore((s) => s.removeBodyFormDataRow);
+  const addBodyUrlencodedRow = useAppStore((s) => s.addBodyUrlencodedRow);
+  const updateBodyUrlencodedRow = useAppStore((s) => s.updateBodyUrlencodedRow);
+  const removeBodyUrlencodedRow = useAppStore((s) => s.removeBodyUrlencodedRow);
 
   return (
     <div className="flex h-full flex-col p-4">
@@ -70,12 +79,25 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
         </p>
       )}
 
-      {(tab.bodyMode === "form-data" || tab.bodyMode === "x-www-form-urlencoded") && (
-        <p className="rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-          {BODY_MODE_LABELS[tab.bodyMode]} body editing is planned for a future release. As a
-          workaround, switch to <strong>raw</strong> mode and set the{" "}
-          <code className="font-mono">Content-Type</code> header manually.
-        </p>
+      {tab.bodyMode === "form-data" && (
+        <FormDataEditor
+          label="Form-data parameters"
+          rows={tab.bodyFormData || []}
+          onAdd={() => addBodyFormDataRow(tab.id)}
+          onUpdate={(rowId, patch) => updateBodyFormDataRow(tab.id, rowId, patch)}
+          onRemove={(rowId) => removeBodyFormDataRow(tab.id, rowId)}
+        />
+      )}
+
+      {tab.bodyMode === "x-www-form-urlencoded" && (
+        <KeyValueEditor
+          label="URL-encoded parameters"
+          rows={tab.bodyUrlencoded as KeyValueRow[]}
+          showDescription={false}
+          onAdd={() => addBodyUrlencodedRow(tab.id)}
+          onUpdate={(rowId, patch) => updateBodyUrlencodedRow(tab.id, rowId, patch)}
+          onRemove={(rowId) => removeBodyUrlencodedRow(tab.id, rowId)}
+        />
       )}
 
 
