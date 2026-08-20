@@ -14,12 +14,25 @@
       - style-src:  'unsafe-inline' required for React runtime styles and Monaco
       - worker-src: blob: required for the ReDoS-screening Web Worker
       - frame-src:  blob: required for the documentation preview iframe (srcDoc)
-      - connect-src: localhost:* for mock-server (4010) and perf-worker (4020) admin APIs
+      - connect-src: 'self' (mock-server/perf-worker on localhost, covered by
+        http:/https: below) + https://cdn.jsdelivr.net (Monaco CDN) + http:
+        and https: for ANY host. This is deliberate, not an oversight: API
+        Lab's entire purpose is sending fetch() requests to whatever URL the
+        user types in (apps/web/src/lib/executeRequest.ts ->
+        packages/request-engine's BrowserFetchExecutor -> native fetch()),
+        which IS subject to connect-src. A narrower allowlist would block the
+        app's core feature for any target host not already listed. The
+        browser's Same-Origin Policy plus the *target* server's own CORS
+        headers remain the real security boundary for reading the response;
+        connect-src is not a meaningful additional layer for this app
+        archetype. No ws:/wss: — WebSocket is not used by the app (it is
+        explicitly stripped from the sandboxed pre/post-request script
+        worker, see packages/script-engine).
       - No unsafe-eval: confirmed zero eval()/new Function() in production code
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src 'self' 'self' blob:; connect-src 'self' http://localhost:* https://cdn.jsdelivr.net; img-src 'self' data:;"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src 'self' 'self' blob:; connect-src 'self' https: http: https://cdn.jsdelivr.net; img-src 'self' data:;"
     />
     <title>API Lab</title>
   </head>
