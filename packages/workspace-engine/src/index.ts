@@ -6,6 +6,7 @@ export * from "./request.ts";
 export * from "./reorder.ts";
 export * from "./serialize.ts";
 export * from "./dependencyGraph.ts";
+export * from "./workspaceRegistry.ts";
 
 import type { Workspace } from "./types.ts";
 

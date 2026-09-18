@@ -13,6 +13,9 @@ import {
   resetEnvironmentsStorage,
   loadRunnerHistoryFromStorage,
   resetRunnerHistoryStorage,
+  loadWorkspaceRegistryFromStorage,
+  workspaceStorageKey,
+  LEGACY_WORKSPACE_ID,
 } from "./persistence";
 
 const WORKSPACE_KEY = "api-lab-workspace";
@@ -25,14 +28,14 @@ describe("persistence: workspace", () => {
   });
 
   it("reports empty when nothing is stored", () => {
-    expect(loadWorkspaceFromStorage()).toEqual({ status: "empty" });
+    expect(loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID)).toEqual({ status: "empty" });
   });
 
   it("round-trips a valid persisted workspace", () => {
     const { workspace } = createCollection(createEmptyWorkspace(), "Coll");
     window.localStorage.setItem(WORKSPACE_KEY, JSON.stringify(serializeWorkspace(workspace)));
 
-    const result = loadWorkspaceFromStorage();
+    const result = loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID);
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.workspace.collections[0]!.name).toBe("Coll");
@@ -41,26 +44,92 @@ describe("persistence: workspace", () => {
 
   it("returns an error (not a throw) for malformed JSON", () => {
     window.localStorage.setItem(WORKSPACE_KEY, "{not json");
-    const result = loadWorkspaceFromStorage();
+    const result = loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID);
     expect(result.status).toBe("error");
   });
 
   it("returns an error (not a throw) for a structurally invalid workspace", () => {
     window.localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ version: 1, workspace: { collections: "nope" } }));
-    const result = loadWorkspaceFromStorage();
+    const result = loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID);
     expect(result.status).toBe("error");
   });
 
   it("returns an error for an unsupported future version", () => {
     window.localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ version: 999, workspace: { collections: [] } }));
-    const result = loadWorkspaceFromStorage();
+    const result = loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID);
     expect(result.status).toBe("error");
   });
 
   it("resetWorkspaceStorage clears the stored workspace", () => {
     window.localStorage.setItem(WORKSPACE_KEY, JSON.stringify(serializeWorkspace(createEmptyWorkspace())));
-    resetWorkspaceStorage();
+    resetWorkspaceStorage(LEGACY_WORKSPACE_ID);
     expect(window.localStorage.getItem(WORKSPACE_KEY)).toBeNull();
+  });
+});
+
+describe("persistence: workspace registry migration (zero-data-loss)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("a brand-new install (no legacy key) gets a single default workspace, empty", () => {
+    const result = loadWorkspaceRegistryFromStorage();
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.migrated).toBe(true);
+    expect(result.registry.workspaces).toHaveLength(1);
+    expect(result.registry.workspaces[0]!.id).toBe(LEGACY_WORKSPACE_ID);
+    expect(result.registry.activeWorkspaceId).toBe(LEGACY_WORKSPACE_ID);
+    // The legacy workspace's data key is untouched — nothing written there.
+    expect(window.localStorage.getItem(WORKSPACE_KEY)).toBeNull();
+  });
+
+  it("an existing single-workspace user's data becomes exactly one default workspace, byte-identical, never duplicated", () => {
+    const { workspace } = createCollection(createEmptyWorkspace(), "Pre-existing Collection");
+    const persistedBlob = JSON.stringify(serializeWorkspace(workspace));
+    window.localStorage.setItem(WORKSPACE_KEY, persistedBlob);
+
+    const registryResult = loadWorkspaceRegistryFromStorage();
+    expect(registryResult.status).toBe("ok");
+    if (registryResult.status !== "ok") return;
+    expect(registryResult.migrated).toBe(true);
+    expect(registryResult.registry.workspaces).toHaveLength(1);
+    expect(registryResult.registry.workspaces[0]!.id).toBe(LEGACY_WORKSPACE_ID);
+    expect(registryResult.registry.activeWorkspaceId).toBe(LEGACY_WORKSPACE_ID);
+
+    // The legacy key's bytes are exactly what they were before migration —
+    // never rewritten, never duplicated elsewhere.
+    expect(window.localStorage.getItem(WORKSPACE_KEY)).toBe(persistedBlob);
+    expect(workspaceStorageKey(LEGACY_WORKSPACE_ID)).toBe(WORKSPACE_KEY);
+
+    // And it loads back as the same data, through the normal per-workspace load path.
+    const loaded = loadWorkspaceFromStorage(LEGACY_WORKSPACE_ID);
+    expect(loaded.status).toBe("ok");
+    if (loaded.status === "ok") {
+      expect(loaded.workspace.collections[0]!.name).toBe("Pre-existing Collection");
+    }
+  });
+
+  it("only migrates once — a second load reads the now-persisted registry, not a fresh migration", () => {
+    window.localStorage.setItem(
+      WORKSPACE_KEY,
+      JSON.stringify(serializeWorkspace(createCollection(createEmptyWorkspace(), "X").workspace)),
+    );
+    const first = loadWorkspaceRegistryFromStorage();
+    expect(first.status).toBe("ok");
+    if (first.status !== "ok") return;
+    expect(first.migrated).toBe(true);
+
+    const second = loadWorkspaceRegistryFromStorage();
+    expect(second.status).toBe("ok");
+    if (second.status !== "ok") return;
+    expect(second.migrated).toBe(false);
+    expect(second.registry).toEqual(first.registry);
+  });
+
+  it("a new (non-legacy) workspace gets its own storage key, distinct from the legacy key", () => {
+    expect(workspaceStorageKey("ws_abc123")).not.toBe(WORKSPACE_KEY);
+    expect(workspaceStorageKey("ws_abc123")).toContain("ws_abc123");
   });
 });
 

@@ -9,6 +9,7 @@ import type { RequestConfig, RequestLocation, Workspace } from "@api-lab/workspa
 import { resolveAuthConfig } from "./authResolve";
 import { resolveInheritedAuth } from "./authInheritance";
 import { resolveContainers } from "./workspaceLookup";
+import { resolveFolderChainAuth } from "./executeRequest";
 import type { RunnableRequest } from "./runner";
 
 export type BuildSpecsResult =
@@ -98,11 +99,12 @@ function buildOne(
     return { ok: false, error: `"${name}" has a circular variable reference. Fix the environment before running a load test.` };
   }
 
-  // D.1 Step 5: same inheritance resolution as the request/runner pipeline
-  // (see executeRequest.ts) — the containing Folder/Collection's auth is
+  // D.1 Step 5 + Phase 2 decision #5: same ancestor-chain inheritance
+  // resolution as the request/runner pipeline (see executeRequest.ts) — the
+  // containing folder ancestor chain's auth (nearer folder wins) is
   // consulted only when this request's own auth is `{type:"inherit"}`.
-  const { collection, folder } = resolveContainers(workspace, location);
-  const inheritedAuth = resolveInheritedAuth(config.auth, folder?.auth, collection?.auth);
+  const { collection, folderChain } = resolveContainers(workspace, location);
+  const inheritedAuth = resolveInheritedAuth(config.auth, resolveFolderChainAuth(folderChain), collection?.auth);
 
   const authResolution = resolveAuthConfig(inheritedAuth, context);
   if (authResolution.hasCircularReference) {

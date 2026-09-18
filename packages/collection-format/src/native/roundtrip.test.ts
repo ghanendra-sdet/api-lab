@@ -20,7 +20,7 @@ describe("native export/import round-trip", () => {
     workspace = folderResult.workspace;
     workspace = createRequest(
       workspace,
-      { collectionId, folderId: folderResult.folderId },
+      { collectionId, folderPath: [folderResult.folderId] },
       "My Request",
       emptyRequestConfig({ url: "https://example.com", auth: { type: "bearer", token: "{{token}}" } }),
     ).workspace;
@@ -42,8 +42,11 @@ describe("native export/import round-trip", () => {
     const folder = normalized.collections[0]!.items.find((i) => i.type === "folder");
     expect(folder?.type).toBe("folder");
     if (folder?.type === "folder") {
-      expect(folder.items[0]!.name).toBe("My Request");
-      expect(folder.items[0]!.request.auth).toEqual({ type: "bearer", token: "{{token}}" });
+      const request = folder.items[0]!;
+      expect(request.name).toBe("My Request");
+      if (request.type === "request") {
+        expect(request.request.auth).toEqual({ type: "bearer", token: "{{token}}" });
+      }
     }
     expect(normalized.environments[0]!.name).toBe("Dev");
     expect(normalized.environments[0]!.variables[0]).toEqual({ key: "token", value: "abc", enabled: true, secret: true });

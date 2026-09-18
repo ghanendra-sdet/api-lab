@@ -3,6 +3,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseOpenApiDocument } from "./parse.ts";
 import { adaptOpenApiDocument } from "./importAdapter.ts";
+import type { NormalizedItem, NormalizedRequest } from "../types.ts";
+
+/** Narrows a folder's `NormalizedItem[]` to just the request with this name. */
+function findRequest(items: NormalizedItem[] | undefined, name: string): NormalizedRequest | undefined {
+  return (items ?? []).find((r): r is NormalizedRequest => r.type === "request" && r.name === name);
+}
 
 const fixturesDir = fileURLToPath(new URL("../../fixtures/openapi", import.meta.url));
 
@@ -36,7 +42,7 @@ describe("OpenAPI 3.0 import", () => {
     if (!parsed.ok) throw new Error("fixture should parse");
     const result = adaptOpenApiDocument(parsed.data);
     const petsFolder = result.items.find((i) => i.type === "folder" && i.name === "Pets");
-    const getById = petsFolder?.type === "folder" ? petsFolder.items.find((r) => r.name === "Get pet by ID") : undefined;
+    const getById = petsFolder?.type === "folder" ? findRequest(petsFolder.items, "Get pet by ID") : undefined;
 
     expect(getById?.request.url).toBe("https://api.example.com/v1/pets/{{petId}}");
     expect(getById?.request.headers.find((h) => h.key === "X-Request-Id")).toBeDefined();
@@ -47,7 +53,7 @@ describe("OpenAPI 3.0 import", () => {
     if (!parsed.ok) throw new Error("fixture should parse");
     const result = adaptOpenApiDocument(parsed.data);
     const petsFolder = result.items.find((i) => i.type === "folder" && i.name === "Pets");
-    const list = petsFolder?.type === "folder" ? petsFolder.items.find((r) => r.name === "List pets") : undefined;
+    const list = petsFolder?.type === "folder" ? findRequest(petsFolder.items, "List pets") : undefined;
     expect(list?.request.url).toBe("https://api.example.com/v1/pets");
   });
 
@@ -56,7 +62,7 @@ describe("OpenAPI 3.0 import", () => {
     if (!parsed.ok) throw new Error("fixture should parse");
     const result = adaptOpenApiDocument(parsed.data);
     const petsFolder = result.items.find((i) => i.type === "folder" && i.name === "Pets");
-    const create = petsFolder?.type === "folder" ? petsFolder.items.find((r) => r.name === "Create pet") : undefined;
+    const create = petsFolder?.type === "folder" ? findRequest(petsFolder.items, "Create pet") : undefined;
     expect(create?.request.bodyMode).toBe("raw");
     expect(create?.request.bodyRawContent).toContain('"name": "Rex"');
   });
@@ -66,7 +72,7 @@ describe("OpenAPI 3.0 import", () => {
     if (!parsed.ok) throw new Error("fixture should parse");
     const result = adaptOpenApiDocument(parsed.data);
     const petsFolder = result.items.find((i) => i.type === "folder" && i.name === "Pets");
-    const create = petsFolder?.type === "folder" ? petsFolder.items.find((r) => r.name === "Create pet") : undefined;
+    const create = petsFolder?.type === "folder" ? findRequest(petsFolder.items, "Create pet") : undefined;
     expect(create?.request.auth).toEqual({ type: "bearer", token: "{{token}}" });
   });
 });

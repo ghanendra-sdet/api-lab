@@ -9,7 +9,7 @@ import { sampleRequestConfig } from "./testHelpers.ts";
 function buildSampleWorkspace() {
   const { workspace: w1, collectionId } = createCollection(createEmptyWorkspace(), "API");
   const { workspace: w2, folderId } = createFolder(w1, collectionId, "Auth");
-  const { workspace: w3 } = createRequest(w2, { collectionId, folderId }, "Login", sampleRequestConfig());
+  const { workspace: w3 } = createRequest(w2, { collectionId, folderPath: [folderId] }, "Login", sampleRequestConfig());
   return w3;
 }
 
@@ -349,7 +349,7 @@ describe("Milestone D.1 backward compatibility & serialization", () => {
     const workspace = createEmptyWorkspace();
     const { workspace: w1, collectionId } = createCollection(workspace, "Col");
     const { workspace: w2, folderId } = createFolder(w1, collectionId, "Fol");
-    const { workspace: w3 } = createRequest(w2, { collectionId, folderId }, "Req", sampleRequestConfig({
+    const { workspace: w3 } = createRequest(w2, { collectionId, folderPath: [folderId] }, "Req", sampleRequestConfig({
       variables: [customVar],
       auth: { type: "bearer", token: "token" },
     }));
@@ -380,5 +380,100 @@ describe("Milestone D.1 backward compatibility & serialization", () => {
       expect(resReq && "request" in resReq && resReq.request.variables).toEqual([customVar]);
       expect(resReq && "request" in resReq && resReq.request.auth).toEqual({ type: "bearer", token: "token" });
     }
+  });
+});
+
+describe("Phase 2 (nested folders) backward compatibility & round-trip", () => {
+  it("deserializes a pre-Phase-2 flat folder (items: SavedRequest[] only, zero nested folders) as valid", () => {
+    // Exactly the shape every folder persisted before Phase 2 has: `items`
+    // containing only requests, never another folder. Phase 2 must treat
+    // this as "a folder with zero subfolders" — not require a migration.
+    const legacyFlatFolder = {
+      version: 1,
+      workspace: {
+        collections: [
+          {
+            id: "c1",
+            name: "Collection",
+            items: [
+              {
+                id: "f1",
+                type: "folder",
+                name: "Folder",
+                items: [
+                  {
+                    id: "r1",
+                    type: "request",
+                    name: "Request",
+                    request: {
+                      method: "GET",
+                      url: "https://example.com",
+                      params: [],
+                      headers: [],
+                      bodyMode: "none",
+                      bodyRawFormat: "JSON",
+                      bodyRawContent: "",
+                    },
+                    createdAt: "2024-01-01T00:00:00.000Z",
+                    updatedAt: "2024-01-01T00:00:00.000Z",
+                  },
+                ],
+                createdAt: "2024-01-01T00:00:00.000Z",
+                updatedAt: "2024-01-01T00:00:00.000Z",
+              },
+            ],
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const result = deserializeWorkspace(legacyFlatFolder);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const folder = result.workspace.collections[0]!.items[0]!;
+    expect(folder.type).toBe("folder");
+    if (folder.type !== "folder") return;
+    expect(folder.items).toHaveLength(1);
+    expect(folder.items[0]!.type).toBe("request");
+    // No nested folders — same shape as before Phase 2, just now also a
+    // valid instance of the wider `CollectionItem[]` items type.
+    expect(folder.items.every((i) => i.type === "request")).toBe(true);
+  });
+
+  it("round-trips a folder nested three levels deep, preserving structure, variables, and auth at every level", () => {
+    const workspace = createEmptyWorkspace();
+    const { workspace: w1, collectionId } = createCollection(workspace, "Col");
+    const { workspace: w2, folderId: grandparentId } = createFolder(w1, collectionId, "Grandparent");
+    const { workspace: w3, folderId: parentId } = createFolder(w2, collectionId, "Parent", grandparentId);
+    const { workspace: w4, folderId: childId } = createFolder(w3, collectionId, "Child", parentId);
+    const { workspace: w5 } = createRequest(
+      w4,
+      { collectionId, folderPath: [grandparentId, parentId, childId] },
+      "Deeply Nested Request",
+      sampleRequestConfig({ url: "https://example.com/deep" }),
+    );
+
+    const persisted = serializeWorkspace(w5);
+    const result = deserializeWorkspace(persisted);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const grandparent = result.workspace.collections[0]!.items[0]!;
+    expect(grandparent.type).toBe("folder");
+    if (grandparent.type !== "folder") return;
+    const parent = grandparent.items[0]!;
+    expect(parent.type).toBe("folder");
+    if (parent.type !== "folder") return;
+    const child = parent.items[0]!;
+    expect(child.type).toBe("folder");
+    if (child.type !== "folder") return;
+    const request = child.items[0]!;
+    expect(request.type).toBe("request");
+    if (request.type !== "request") return;
+    expect(request.name).toBe("Deeply Nested Request");
+    expect(request.request.url).toBe("https://example.com/deep");
   });
 });

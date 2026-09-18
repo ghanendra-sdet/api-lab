@@ -38,7 +38,7 @@ describe("Postman collection import", () => {
     }
   });
 
-  it("flattens folders nested more than one level deep, with a warning", () => {
+  it("preserves folders nested more than one level deep as real nested folders (Phase 2 of Workspace Management)", () => {
     const parsed = parsePostmanCollection(loadFixture("nested-folders-and-auth.json"));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
@@ -47,10 +47,17 @@ describe("Postman collection import", () => {
     const usersFolder = result.items.find((i) => i.type === "folder" && i.name === "Users");
     expect(usersFolder).toBeDefined();
     if (usersFolder?.type === "folder") {
-      // "Deeply Nested" sub-folder's request is flattened into "Users".
-      expect(usersFolder.items.some((r) => r.name === "Get User By Id")).toBe(true);
+      // "Deeply Nested" survives as a real nested folder — not flattened
+      // into "Users" — and its request lives inside it, not as a sibling.
+      const deeplyNested = usersFolder.items.find((i) => i.type === "folder" && i.name === "Deeply Nested");
+      expect(deeplyNested).toBeDefined();
+      expect(usersFolder.items.some((i) => i.name === "Get User By Id")).toBe(false);
+      if (deeplyNested?.type === "folder") {
+        expect(deeplyNested.items.some((i) => i.name === "Get User By Id")).toBe(true);
+      }
     }
-    expect(result.warnings.some((w) => w.includes("nested more than one level deep"))).toBe(true);
+    // No more lossy flattening, so no such warning is produced.
+    expect(result.warnings.some((w) => w.includes("nested more than one level deep"))).toBe(false);
   });
 
   it("maps Basic, Bearer, and API Key auth", () => {
@@ -59,7 +66,10 @@ describe("Postman collection import", () => {
     const result = adaptPostmanCollection(parsed.data);
 
     const usersFolder = result.items.find((i) => i.type === "folder" && i.name === "Users");
-    const basicRequest = usersFolder?.type === "folder" ? usersFolder.items.find((r) => r.name === "Basic Auth Request") : undefined;
+    const basicRequest =
+      usersFolder?.type === "folder"
+        ? usersFolder.items.find((r): r is typeof r & { type: "request" } => r.type === "request" && r.name === "Basic Auth Request")
+        : undefined;
     expect(basicRequest?.request.auth).toEqual({ type: "basic", username: "alice", password: "wonderland" });
 
     const bearerRequest = result.items.find((i) => i.type === "request" && i.name === "Bearer Request");

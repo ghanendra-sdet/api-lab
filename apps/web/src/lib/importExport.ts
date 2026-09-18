@@ -1,6 +1,6 @@
 import { createCollection, createFolder, createRequest, type Workspace } from "@api-lab/workspace-engine";
 import { createEnvironment, addVariable, updateVariable, type EnvironmentWorkspace } from "@api-lab/environment-engine";
-import type { NormalizedCollectionImport, NormalizedEnvironmentImport } from "@api-lab/collection-format";
+import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem } from "@api-lab/collection-format";
 
 /** Non-destructive collision handling: an imported name that already exists
  * gets a distinguishing suffix rather than silently overwriting or
@@ -16,27 +16,42 @@ function uniqueName(existing: Set<string>, name: string): string {
   return candidate;
 }
 
+/**
+ * Recreates a (possibly nested — see `packages/collection-format`'s
+ * de-flattened Postman import, Phase 2 of Workspace Management) tree of
+ * `NormalizedItem`s under a collection or folder. `parentFolderPath` is the
+ * ordered ancestor chain (outermost first) of the folder being populated —
+ * empty for the collection's own top level — and grows by one id each time
+ * a nested `NormalizedFolder` is recursed into, so import depth is no
+ * longer capped at one level.
+ */
+function applyItems(
+  workspace: Workspace,
+  collectionId: string,
+  items: NormalizedItem[],
+  parentFolderPath: string[],
+): Workspace {
+  let w = workspace;
+  const immediateParentId = parentFolderPath[parentFolderPath.length - 1];
+  for (const item of items) {
+    if (item.type === "folder") {
+      const folderResult = createFolder(w, collectionId, item.name, immediateParentId);
+      w = applyItems(folderResult.workspace, collectionId, item.items, [...parentFolderPath, folderResult.folderId]);
+    } else {
+      w = createRequest(w, { collectionId, folderPath: parentFolderPath }, item.name, item.request).workspace;
+    }
+  }
+  return w;
+}
+
 export function applyCollectionImport(
   workspace: Workspace,
   normalized: NormalizedCollectionImport,
 ): { workspace: Workspace; collectionId: string } {
   const name = uniqueName(new Set(workspace.collections.map((c) => c.name)), normalized.name);
   const created = createCollection(workspace, name);
-  let w = created.workspace;
   const collectionId = created.collectionId;
-
-  for (const item of normalized.items) {
-    if (item.type === "folder") {
-      const folderResult = createFolder(w, collectionId, item.name);
-      w = folderResult.workspace;
-      for (const req of item.items) {
-        w = createRequest(w, { collectionId, folderId: folderResult.folderId }, req.name, req.request).workspace;
-      }
-    } else {
-      w = createRequest(w, { collectionId }, item.name, item.request).workspace;
-    }
-  }
-
+  const w = applyItems(created.workspace, collectionId, normalized.items, []);
   return { workspace: w, collectionId };
 }
 

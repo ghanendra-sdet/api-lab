@@ -65,8 +65,16 @@ export interface Folder {
   id: string;
   type: "folder";
   name: string;
-  /** Folders are one level deep — items here are requests only. */
-  items: SavedRequest[];
+  /**
+   * Phase 2 of Workspace Management: folders nest arbitrarily deep — an item
+   * here may itself be another `Folder`. Every lookup/update over this field
+   * must recurse (see `internal.ts`'s `findFolder`/`withItemsAtLocation` and
+   * `folder.ts`'s CRUD functions). Backward compatible with every folder
+   * persisted before this phase: a pre-Phase-2 flat folder is simply one
+   * whose `items` happen to contain zero `Folder` entries — nothing about
+   * the old shape needs migrating, see `schema.ts`.
+   */
+  items: CollectionItem[];
   createdAt: string;
   updatedAt: string;
   variables?: Variable[];
@@ -90,10 +98,22 @@ export interface Workspace {
   collections: Collection[];
 }
 
-/** Addresses where a request lives: directly in a collection, or inside one of its folders. */
+/**
+ * Addresses where a request lives: directly in a collection, or nested
+ * inside one or more folders. `folderPath` is the ordered ancestor chain
+ * of folder ids, outermost first (e.g. `[grandparentId, parentId]` for a
+ * request inside `parent`, which is inside `grandparent`). Omitted or an
+ * empty array means the request lives directly in the collection.
+ *
+ * Phase 2 of Workspace Management renamed this from a single optional
+ * `folderId` to this ordered chain, since folders can now nest arbitrarily
+ * deep and several call sites (the Runner's folder-scoping, D.1's
+ * ancestor-chain variable/auth inheritance) need the *full* chain, not just
+ * the immediate parent.
+ */
 export interface RequestLocation {
   collectionId: string;
-  folderId?: string;
+  folderPath?: string[];
 }
 
 export const WORKSPACE_FORMAT_VERSION = 1;
@@ -101,4 +121,33 @@ export const WORKSPACE_FORMAT_VERSION = 1;
 export interface PersistedWorkspace {
   version: number;
   workspace: Workspace;
+}
+
+/**
+ * Phase 1 of Workspace Management: a registry of independent workspaces,
+ * each pointing at its own persisted `Workspace{collections}` blob (see
+ * apps/web/src/lib/persistence.ts for the storage-key mapping). This type is
+ * deliberately minimal — no nested `Workspace` data lives here, just enough
+ * metadata to list and switch between workspaces. Environments, globals, and
+ * history remain global across all workspaces for Phase 1 (a documented
+ * product decision, see plan.md) — nothing about those changes here.
+ */
+export interface WorkspaceMeta {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceRegistry {
+  workspaces: WorkspaceMeta[];
+  activeWorkspaceId: string;
+}
+
+export const WORKSPACE_REGISTRY_FORMAT_VERSION = 1;
+
+export interface PersistedWorkspaceRegistry {
+  version: number;
+  registry: WorkspaceRegistry;
 }

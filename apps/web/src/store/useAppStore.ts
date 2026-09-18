@@ -12,9 +12,11 @@ import {
   getRequestsAtLocation,
   moveCollectionDown as wsMoveCollectionDown,
   moveCollectionUp as wsMoveCollectionUp,
+  moveFolder as wsMoveFolder,
   moveItemDown as wsMoveItemDown,
   moveItemUp as wsMoveItemUp,
   moveRequest as wsMoveRequest,
+  reorderItems as wsReorderItems,
   renameCollection as wsRenameCollection,
   renameFolder as wsRenameFolder,
   renameRequest as wsRenameRequest,
@@ -27,10 +29,16 @@ import {
   isRequest,
   resolveDependencyOrder,
   formatCircularDependencyChain,
+  createEmptyWorkspace,
+  createWorkspaceMeta as wsCreateWorkspaceMeta,
+  renameWorkspaceMeta as wsRenameWorkspaceMeta,
+  deleteWorkspaceMeta as wsDeleteWorkspaceMeta,
   type RequestLocation,
   type Workspace,
   type SavedRequest,
   type RequestConfig,
+  type WorkspaceMeta,
+  type CollectionItem,
 } from "@api-lab/workspace-engine";
 import {
   addVariable as envAddVariable,
@@ -63,16 +71,19 @@ import { requestConfigToTabFields, tabToRequestConfig } from "../lib/requestConf
 import { applyCollectionImport, applyEnvironmentImport } from "../lib/importExport";
 import {
   executeRequestConfig,
+  mergeFolderChainVariables,
+  resolveFolderChainAuth,
   type ContractExecutionOptions,
   type ExecuteRequestResult,
   type ExecutionScopes,
 } from "../lib/executeRequest";
 import type { ScriptResult } from "@api-lab/script-engine";
-import { findRequestLocation, resolveContainers } from "../lib/workspaceLookup";
+import { findFolder as findFolderInTree, findRequestLocation, resolveContainers } from "../lib/workspaceLookup";
 import { findSpecificationForCollection, getContractModel, useContractStore } from "./useContractStore";
 import {
   flattenCollectionRequests,
   createIdleRunnerState,
+  type RunnableRequest,
   type RunnerState,
 } from "../lib/runner";
 import { runSecurityTests, type SecurityTestResult } from "@api-lab/security-engine";
@@ -88,6 +99,7 @@ import {
   saveEnvironmentsToStorage,
   saveTabsToStorage,
   saveWorkspaceToStorage,
+  flushWorkspaceToStorage,
   loadHistoryFromStorage,
   saveHistoryToStorage,
   resetHistoryStorage,
@@ -96,6 +108,9 @@ import {
   loadGlobalsFromStorage,
   saveGlobalsToStorage,
   resetGlobalsStorage,
+  loadWorkspaceRegistryFromStorage,
+  saveWorkspaceRegistryToStorage,
+  LEGACY_WORKSPACE_ID,
 } from "../lib/persistence";
 
 
@@ -106,7 +121,35 @@ function getPreferredTheme(): ThemeMode {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function getStoredFontSize(): number {
+  if (typeof window === "undefined") return 14;
+  const stored = window.localStorage.getItem("api-lab-font-size");
+  const parsed = stored ? Number(stored) : 14;
+  return Number.isFinite(parsed) ? parsed : 14;
+}
+
+function getStoredThemeColor(): string {
+  if (typeof window === "undefined") return "blue";
+  return window.localStorage.getItem("api-lab-theme-color") ?? "blue";
+}
+
+export function applyCustomSettings(fontSize: number, themeColor: string) {
+  if (typeof window === "undefined") return;
+  document.documentElement.style.setProperty("--app-font-size", `${fontSize}px`);
+  document.body.style.fontSize = `${fontSize}px`;
+  const html = document.documentElement;
+  html.classList.remove("theme-blue", "theme-green", "theme-purple", "theme-red");
+  html.classList.add(`theme-${themeColor}`);
+}
+
+const initialFontSize = getStoredFontSize();
+const initialThemeColor = getStoredThemeColor();
+applyCustomSettings(initialFontSize, initialThemeColor);
+
 interface InitialState {
+  workspaces: WorkspaceMeta[];
+  activeWorkspaceId: string;
+  workspaceRegistryLoadError: string | null;
   workspace: Workspace;
   workspaceLoadError: string | null;
   environments: EnvironmentWorkspace;
@@ -120,12 +163,24 @@ interface InitialState {
 }
 
 function loadInitialState(): InitialState {
-  const workspaceResult = loadWorkspaceFromStorage();
+  const registryResult = loadWorkspaceRegistryFromStorage();
+  const registry = registryResult.status === "ok" ? registryResult.registry : registryResult.fallback;
+  const workspaceRegistryLoadError = registryResult.status === "error" ? registryResult.detail : null;
+  const activeWorkspaceId = registry.activeWorkspaceId;
+
+  const workspaceResult = loadWorkspaceFromStorage(activeWorkspaceId);
   const workspace =
     workspaceResult.status === "ok"
       ? workspaceResult.workspace
       : workspaceResult.status === "empty"
-        ? createSeedWorkspace()
+        ? // Only the legacy/default workspace gets the illustrative seed data
+          // (matches pre-Phase-1 first-run behavior exactly); any other
+          // "empty" result means a workspace whose data hasn't been written
+          // yet (e.g. interrupted right after creation) and should just be
+          // empty, not re-seeded with example content.
+          activeWorkspaceId === LEGACY_WORKSPACE_ID
+          ? createSeedWorkspace()
+          : createEmptyWorkspace()
         : { collections: [] };
   const workspaceLoadError = workspaceResult.status === "error" ? workspaceResult.detail : null;
 
@@ -144,6 +199,9 @@ function loadInitialState(): InitialState {
   const persistedTabs = loadTabsFromStorage();
   if (persistedTabs) {
     return {
+      workspaces: registry.workspaces,
+      activeWorkspaceId,
+      workspaceRegistryLoadError,
       workspace,
       workspaceLoadError,
       environments,
@@ -159,6 +217,9 @@ function loadInitialState(): InitialState {
 
   const tab = createInitialTab();
   return {
+    workspaces: registry.workspaces,
+    activeWorkspaceId,
+    workspaceRegistryLoadError,
     workspace,
     workspaceLoadError,
     environments,
@@ -191,6 +252,12 @@ interface AppState {
   theme: ThemeMode;
   toggleTheme: () => void;
 
+  // Customization
+  appFontSize: number;
+  setAppFontSize: (size: number) => void;
+  appThemeColor: string;
+  setAppThemeColor: (color: string) => void;
+
   // Environments / variables
   environments: EnvironmentWorkspace;
   environmentsLoadError: string | null;
@@ -219,6 +286,17 @@ interface AppState {
   ) => void;
   removeGlobalVariable: (variableId: string) => void;
 
+  // Workspace registry (Phase 1 of Workspace Management) — the list of
+  // workspaces and which one is active. `workspace` below always holds the
+  // active workspace's data; switching just repoints it at a different blob.
+  workspaces: WorkspaceMeta[];
+  activeWorkspaceId: string;
+  workspaceRegistryLoadError: string | null;
+  switchWorkspace: (workspaceId: string) => void;
+  createWorkspace: (name: string, description?: string) => string;
+  renameWorkspace: (workspaceId: string, name: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
+
   // Workspace: collections / folders / saved requests
   workspace: Workspace;
   workspaceLoadError: string | null;
@@ -232,11 +310,13 @@ interface AppState {
   updateCollectionVariables: (collectionId: string, variables: Variable[]) => void;
   updateCollectionAuth: (collectionId: string, auth: AuthConfig) => void;
 
-  createFolder: (collectionId: string, name: string) => string;
+  createFolder: (collectionId: string, name: string, parentFolderId?: string) => string;
   renameFolder: (collectionId: string, folderId: string, name: string) => void;
   deleteFolder: (collectionId: string, folderId: string) => void;
   updateFolderVariables: (collectionId: string, folderId: string, variables: Variable[]) => void;
   updateFolderAuth: (collectionId: string, folderId: string, auth: AuthConfig) => void;
+  /** Phase 3 of Workspace Management: moves a folder (and its subtree) between locations — drag-and-drop. */
+  moveFolder: (from: RequestLocation, to: RequestLocation, folderId: string) => void;
 
   renameSavedRequest: (location: RequestLocation, requestId: string, name: string) => void;
   deleteSavedRequest: (location: RequestLocation, requestId: string) => void;
@@ -244,6 +324,8 @@ interface AppState {
   moveSavedRequest: (from: RequestLocation, to: RequestLocation, requestId: string) => void;
   moveItemUp: (location: RequestLocation, itemId: string) => void;
   moveItemDown: (location: RequestLocation, itemId: string) => void;
+  /** Phase 3 of Workspace Management: drag-to-reorder a folder/request to an arbitrary index within one container. */
+  reorderItems: (location: RequestLocation, itemId: string, newIndex: number) => void;
 
   // Import (Postman / OpenAPI / API Lab native) — see @api-lab/collection-format
   importCollection: (normalized: NormalizedCollectionImport) => string;
@@ -393,7 +475,13 @@ function updateTab(
 }
 
 function sameLocation(a: RequestLocation, b: RequestLocation): boolean {
-  return a.collectionId === b.collectionId && a.folderId === b.folderId;
+  const aPath = a.folderPath ?? [];
+  const bPath = b.folderPath ?? [];
+  return (
+    a.collectionId === b.collectionId &&
+    aPath.length === bPath.length &&
+    aPath.every((id, i) => id === bPath[i])
+  );
 }
 
 
@@ -428,35 +516,39 @@ function buildContractOptions(
   };
 }
 
-function buildDependencyMap(workspace: Workspace): Record<string, string[]> {
-  const map: Record<string, string[]> = {};
-  for (const collection of workspace.collections) {
-    for (const item of collection.items) {
+// Phase 2 of Workspace Management: folders can nest arbitrarily deep, so
+// every walk over a collection's item tree recurses into nested folders
+// rather than assuming one flat level — see plan.md's "Concern flagged for
+// Phase 2" note, which called this exact spot out ahead of time.
+function forEachSavedRequest(workspace: Workspace, visit: (req: SavedRequest) => void): void {
+  function walk(items: CollectionItem[]): void {
+    for (const item of items) {
       if (isFolder(item)) {
-        for (const req of item.items) {
-          map[req.id] = req.request.dependsOn || [];
-        }
+        walk(item.items);
       } else if (isRequest(item)) {
-        map[item.id] = item.request.dependsOn || [];
+        visit(item);
       }
     }
   }
+  for (const collection of workspace.collections) {
+    walk(collection.items);
+  }
+}
+
+function buildDependencyMap(workspace: Workspace): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  forEachSavedRequest(workspace, (req) => {
+    map[req.id] = req.request.dependsOn || [];
+  });
   return map;
 }
 
 function getRequestName(workspace: Workspace, id: string): string {
-  for (const collection of workspace.collections) {
-    for (const item of collection.items) {
-      if (isFolder(item)) {
-        for (const req of item.items) {
-          if (req.id === id) return req.name;
-        }
-      } else if (isRequest(item)) {
-        if (item.id === id) return item.name;
-      }
-    }
-  }
-  return id;
+  let name: string | undefined;
+  forEachSavedRequest(workspace, (req) => {
+    if (req.id === id) name = req.name;
+  });
+  return name ?? id;
 }
 
 function validateWorkspaceDependencies(workspace: Workspace, changedRequestId: string): void {
@@ -484,18 +576,11 @@ function validateWorkspaceDependencies(workspace: Workspace, changedRequestId: s
 }
 
 function findSavedRequest(workspace: Workspace, id: string): SavedRequest | undefined {
-  for (const collection of workspace.collections) {
-    for (const item of collection.items) {
-      if (isFolder(item)) {
-        for (const req of item.items) {
-          if (req.id === id) return req;
-        }
-      } else if (isRequest(item)) {
-        if (item.id === id) return item;
-      }
-    }
-  }
-  return undefined;
+  let found: SavedRequest | undefined;
+  forEachSavedRequest(workspace, (req) => {
+    if (!found && req.id === id) found = req;
+  });
+  return found;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -621,16 +706,24 @@ async function executeRequestWithDependencies(
       location = findRequestLocation(workspace, id);
     }
 
-    // D.1 Step 5: resolve this step's containing Folder/Collection so
-    // variable and auth inheritance can be layered in below — recomputed
-    // per step, since a dependency chain can (in principle) cross
-    // collections/folders even though the common case does not.
-    const { collection, folder } = resolveContainers(workspace, location);
+    // D.1 Step 5 + Phase 2 decision #5: resolve this step's containing
+    // Collection and full folder ANCESTOR CHAIN (not just the immediate
+    // folder — folders can now nest arbitrarily deep) so variable and auth
+    // inheritance can be layered in below — recomputed per step, since a
+    // dependency chain can (in principle) cross collections/folders even
+    // though the common case does not.
+    //
+    // `mergeFolderChainVariables`/`resolveFolderChainAuth` (executeRequest.ts)
+    // flatten collection → grandparent folder → parent folder → immediate
+    // folder, nearer scope winning, into the single `folder`/`folderAuth`
+    // values `ExecutionScopes` already expects — `mergeResolutionContext`
+    // and `resolveInheritedAuth` themselves are untouched.
+    const { collection, folderChain } = resolveContainers(workspace, location);
     const containerScopes: Pick<ExecutionScopes, "collection" | "folder" | "collectionAuth" | "folderAuth"> = {
       collection: buildVariableContextFromVariables(collection?.variables),
-      folder: buildVariableContextFromVariables(folder?.variables),
+      folder: mergeFolderChainVariables(folderChain),
       collectionAuth: collection?.auth,
-      folderAuth: folder?.auth,
+      folderAuth: resolveFolderChainAuth(folderChain),
     };
 
     if (executed.size > 0 && scopes.delayMs && scopes.delayMs > 0) {
@@ -720,6 +813,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { theme: next };
     }),
 
+  appFontSize: initialFontSize,
+  setAppFontSize: (size) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("api-lab-font-size", String(size));
+      applyCustomSettings(size, get().appThemeColor);
+    }
+    set({ appFontSize: size });
+  },
+
+  appThemeColor: initialThemeColor,
+  setAppThemeColor: (color) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("api-lab-theme-color", color);
+      applyCustomSettings(get().appFontSize, color);
+    }
+    set({ appThemeColor: color });
+  },
+
   environments: initial.environments,
   environmentsLoadError: initial.environmentsLoadError,
   resetEnvironments: () => {
@@ -789,10 +900,110 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
+  workspaces: initial.workspaces,
+  activeWorkspaceId: initial.activeWorkspaceId,
+  workspaceRegistryLoadError: initial.workspaceRegistryLoadError,
+
+  switchWorkspace: (workspaceId) => {
+    const state = get();
+    if (workspaceId === state.activeWorkspaceId) return;
+    if (!state.workspaces.some((w) => w.id === workspaceId)) return;
+
+    // Flush any pending debounced write for the workspace we're leaving —
+    // see lib/persistence.ts's flushWorkspaceToStorage for why this can't be
+    // skipped (the debounce would otherwise drop the last edit).
+    flushWorkspaceToStorage(state.activeWorkspaceId, state.workspace);
+
+    const result = loadWorkspaceFromStorage(workspaceId);
+    const workspace =
+      result.status === "ok" ? result.workspace : result.status === "empty" ? createEmptyWorkspace() : state.workspace;
+    const workspaceLoadError = result.status === "error" ? result.detail : null;
+
+    // Tabs are session/UI scratch state, not saved data (see
+    // lib/persistence.ts's own framing) — a tab open on a request from the
+    // workspace we're leaving is meaningless here, so it's discarded, never
+    // carried over or silently left pointing at the wrong workspace's data.
+    const freshTab = createEmptyTab();
+    set({
+      activeWorkspaceId: workspaceId,
+      workspace,
+      workspaceLoadError,
+      tabs: [freshTab],
+      activeTabId: freshTab.id,
+      tabRuntimeVariables: {},
+    });
+  },
+
+  createWorkspace: (name, description) => {
+    const state = get();
+    const { registry, workspaceId } = wsCreateWorkspaceMeta(
+      { workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId },
+      name,
+      description,
+    );
+
+    // Same race as switchWorkspace: flush the outgoing workspace before we
+    // repoint `workspace` at the freshly created (empty) one.
+    flushWorkspaceToStorage(state.activeWorkspaceId, state.workspace);
+    const emptyWorkspace = createEmptyWorkspace();
+    flushWorkspaceToStorage(workspaceId, emptyWorkspace);
+
+    const freshTab = createEmptyTab();
+    set({
+      workspaces: registry.workspaces,
+      activeWorkspaceId: workspaceId,
+      workspace: emptyWorkspace,
+      workspaceLoadError: null,
+      tabs: [freshTab],
+      activeTabId: freshTab.id,
+      tabRuntimeVariables: {},
+    });
+    return workspaceId;
+  },
+
+  renameWorkspace: (workspaceId, name) =>
+    set((s) => ({
+      workspaces: wsRenameWorkspaceMeta(
+        { workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId },
+        workspaceId,
+        name,
+      ).workspaces,
+    })),
+
+  deleteWorkspace: (workspaceId) => {
+    const state = get();
+    if (state.workspaces.length <= 1) return;
+    const wasActive = state.activeWorkspaceId === workspaceId;
+    const registry = wsDeleteWorkspaceMeta(
+      { workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId },
+      workspaceId,
+    );
+    resetWorkspaceStorage(workspaceId);
+
+    if (!wasActive) {
+      set({ workspaces: registry.workspaces });
+      return;
+    }
+
+    const result = loadWorkspaceFromStorage(registry.activeWorkspaceId);
+    const workspace =
+      result.status === "ok" ? result.workspace : result.status === "empty" ? createEmptyWorkspace() : state.workspace;
+    const freshTab = createEmptyTab();
+    set({
+      workspaces: registry.workspaces,
+      activeWorkspaceId: registry.activeWorkspaceId,
+      workspace,
+      workspaceLoadError: result.status === "error" ? result.detail : null,
+      tabs: [freshTab],
+      activeTabId: freshTab.id,
+      tabRuntimeVariables: {},
+    });
+  },
+
   workspace: initial.workspace,
   workspaceLoadError: initial.workspaceLoadError,
   resetWorkspace: () => {
-    resetWorkspaceStorage();
+    resetWorkspaceStorage(get().activeWorkspaceId);
     const workspace = createSeedWorkspace();
     set({ workspace, workspaceLoadError: null });
   },
@@ -822,8 +1033,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateCollectionAuth: (collectionId, auth) =>
     set((s) => ({ workspace: wsUpdateCollectionAuth(s.workspace, collectionId, auth) })),
 
-  createFolder: (collectionId, name) => {
-    const { workspace, folderId } = wsCreateFolder(get().workspace, collectionId, name);
+  createFolder: (collectionId, name, parentFolderId) => {
+    const { workspace, folderId } = wsCreateFolder(get().workspace, collectionId, name, parentFolderId);
     set({ workspace });
     return folderId;
   },
@@ -832,8 +1043,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteFolder: (collectionId, folderId) =>
     set((s) => ({
       workspace: wsDeleteFolder(s.workspace, collectionId, folderId),
+      // Deleting a folder cascades to every subfolder nested inside it, so
+      // any open tab on a request anywhere in that subtree — not just
+      // directly in the deleted folder — must also be cleared.
       tabs: s.tabs.map((tab) =>
-        tab.savedLocation?.collectionId === collectionId && tab.savedLocation.folderId === folderId
+        tab.savedLocation?.collectionId === collectionId &&
+        (tab.savedLocation.folderPath ?? []).includes(folderId)
           ? { ...tab, savedRequestId: undefined, savedLocation: undefined, savedSnapshot: undefined }
           : tab,
       ),
@@ -842,6 +1057,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ workspace: wsUpdateFolderVariables(s.workspace, collectionId, folderId, variables) })),
   updateFolderAuth: (collectionId, folderId, auth) =>
     set((s) => ({ workspace: wsUpdateFolderAuth(s.workspace, collectionId, folderId, auth) })),
+  moveFolder: (from, to, folderId) =>
+    set((s) => {
+      // Any open tab on a request that lives inside the moved folder's
+      // subtree has its `savedLocation.folderPath` rewritten to match the
+      // new location — same reasoning as `moveSavedRequest` below, extended
+      // to every descendant of the moved folder (not just one request).
+      const oldPrefix = [...(from.folderPath ?? []), folderId];
+      const newPrefix = [...(to.folderPath ?? []), folderId];
+      return {
+        workspace: wsMoveFolder(s.workspace, from, to, folderId),
+        tabs: s.tabs.map((tab) => {
+          const loc = tab.savedLocation;
+          if (!loc || loc.collectionId !== from.collectionId) return tab;
+          const path = loc.folderPath ?? [];
+          if (path.length < oldPrefix.length || !oldPrefix.every((id, i) => path[i] === id)) return tab;
+          return {
+            ...tab,
+            savedLocation: {
+              collectionId: to.collectionId,
+              folderPath: [...newPrefix, ...path.slice(oldPrefix.length)],
+            },
+          };
+        }),
+      };
+    }),
 
   renameSavedRequest: (location, requestId, name) =>
     set((s) => ({
@@ -874,6 +1114,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   moveItemUp: (location, itemId) => set((s) => ({ workspace: wsMoveItemUp(s.workspace, location, itemId) })),
   moveItemDown: (location, itemId) =>
     set((s) => ({ workspace: wsMoveItemDown(s.workspace, location, itemId) })),
+  reorderItems: (location, itemId, newIndex) =>
+    set((s) => ({ workspace: wsReorderItems(s.workspace, location, itemId, newIndex) })),
 
   importCollection: (normalized) => {
     const { workspace, collectionId } = applyCollectionImport(get().workspace, normalized);
@@ -988,7 +1230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
 
-    const requests = getRequestsAtLocation(state.workspace, location.collectionId, location.folderId);
+    const requests = getRequestsAtLocation(state.workspace, location.collectionId, location.folderPath ?? []);
     const saved = requests.find((r) => r.id === requestId);
     if (!saved) return;
 
@@ -1338,8 +1580,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const collection = state.workspace.collections.find((c) => c.id === collectionId);
     if (!collection) return;
 
-    const requested = new Set(requestIds);
-    const flat = flattenCollectionRequests(collection).filter((r) => requested.has(r.id));
+    // Phase 3 of Workspace Management: `requestIds` is now the caller's
+    // (RunnerDialog's) user-reorderable `executionOrder`, already filtered
+    // to the selected requests — this array's order IS the execution order.
+    // Previously this derived order from `flattenCollectionRequests`'s
+    // collection-tree order filtered by selection; the one-line swap below
+    // is the sole change needed here, per plan.md's explicit architectural
+    // confirmation — everything downstream (`executeRequestWithDependencies`,
+    // dependency resolution) is already per-request-ID and order-agnostic.
+    const byId = new Map(flattenCollectionRequests(collection).map((r) => [r.id, r] as const));
+    const flat = requestIds.map((id) => byId.get(id)).filter((r): r is RunnableRequest => r !== undefined);
     const environment = state.environments.environments.find((e) => e.id === environmentId);
     const dataset = state.runnerDataset;
     // The Runner validates against the specification bound to the collection
@@ -1549,10 +1799,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (finalState.collectionId) {
       const collection = state.workspace.collections.find((c) => c.id === finalState.collectionId);
       const collectionName = collection ? collection.name : "Unknown Collection";
-      const folder = collection && folderId
-        ? collection.items.find((item) => isFolder(item) && item.id === folderId)
-        : null;
-      const folderName = folder && isFolder(folder) ? folder.name : null;
+      // Folders can now nest arbitrarily deep — the run's `folderId` may be
+      // a subfolder anywhere in the collection's tree, not just top-level.
+      const folder = collection && folderId ? findFolderInTree(collection, folderId) : null;
+      const folderName = folder ? folder.name : null;
       const environment = state.environments.environments.find((e) => e.id === environmentId);
       const environmentName = environment ? environment.name : null;
 
@@ -1654,12 +1904,31 @@ export function useActiveEnvironment() {
 // Persist the workspace (debounced) whenever it changes, and skip writes
 // while a load error is being shown — see loadWorkspaceFromStorage's
 // "don't clobber possibly-recoverable data" reasoning in lib/persistence.ts.
+// Always writes to the CURRENTLY active workspace's key (read fresh from
+// state on every fire, never captured) — `state.workspace` only ever holds
+// the active workspace's data, so this is always correct even right after a
+// switch/create, whose own actions flush the outgoing workspace synchronously
+// before this fires for the incoming one.
 let lastWorkspace = useAppStore.getState().workspace;
 useAppStore.subscribe((state) => {
   if (state.workspace !== lastWorkspace) {
     lastWorkspace = state.workspace;
     if (!state.workspaceLoadError) {
-      saveWorkspaceToStorage(state.workspace);
+      saveWorkspaceToStorage(state.activeWorkspaceId, state.workspace);
+    }
+  }
+});
+
+// Persist the workspace registry (list of workspaces + active id) whenever
+// either changes.
+let lastWorkspaces = useAppStore.getState().workspaces;
+let lastActiveWorkspaceId = useAppStore.getState().activeWorkspaceId;
+useAppStore.subscribe((state) => {
+  if (state.workspaces !== lastWorkspaces || state.activeWorkspaceId !== lastActiveWorkspaceId) {
+    lastWorkspaces = state.workspaces;
+    lastActiveWorkspaceId = state.activeWorkspaceId;
+    if (!state.workspaceRegistryLoadError) {
+      saveWorkspaceRegistryToStorage({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId });
     }
   }
 });

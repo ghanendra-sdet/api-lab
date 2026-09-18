@@ -140,30 +140,28 @@ function adaptItems(items: PostmanItem[], collectionWarnings: string[]): Normali
   const result: NormalizedItem[] = [];
   for (const item of items) {
     if (item.item) {
-      // Postman folders can nest arbitrarily; API Lab folders are one level
-      // deep (see docs/ARCHITECTURE.md, Milestone 3). A nested sub-folder's
-      // requests are flattened into the parent folder with a warning,
-      // rather than silently dropped or crashing on deep recursion.
-      const nestedRequests: NormalizedRequest[] = [];
-      const flatten = (nodes: PostmanItem[]) => {
-        for (const node of nodes) {
-          if (node.item) {
-            collectionWarnings.push(
-              `Folder "${node.name ?? "Untitled"}" is nested more than one level deep; its requests were flattened into "${item.name ?? "Untitled Folder"}" (API Lab folders are one level deep).`,
-            );
-            flatten(node.item);
-          } else {
-            nestedRequests.push(adaptRequestItem(node));
-          }
-        }
-      };
-      flatten(item.item);
-      result.push({ type: "folder", name: item.name ?? "Untitled Folder", items: nestedRequests });
+      // Postman folders nest arbitrarily; as of Phase 2 of Workspace
+      // Management, API Lab folders do too — a nested sub-folder is
+      // preserved as a real nested folder rather than flattened into its
+      // parent. (Before Phase 2, API Lab folders were one level deep, so
+      // this recursed and flattened with a warning; that lossy behavior is
+      // no longer needed now that the target model supports the same
+      // nesting Postman does.)
+      result.push({
+        type: "folder",
+        name: item.name ?? "Untitled Folder",
+        items: adaptItems(item.item, collectionWarnings),
+      });
     } else {
       result.push(adaptRequestItem(item));
     }
   }
   return result;
+}
+
+/** Collects every request-level warning out of a (possibly nested) item tree. */
+function collectItemWarnings(items: NormalizedItem[]): string[] {
+  return items.flatMap((i) => (i.type === "request" ? i.warnings : collectItemWarnings(i.items)));
 }
 
 export function adaptPostmanCollection(collection: PostmanCollection): NormalizedCollectionImport {
@@ -181,7 +179,7 @@ export function adaptPostmanCollection(collection: PostmanCollection): Normalize
     kind: "collection",
     name: collection.info.name,
     items,
-    warnings: [...warnings, ...items.flatMap((i) => (i.type === "request" ? i.warnings : i.items.flatMap((r) => r.warnings)))],
+    warnings: [...warnings, ...collectItemWarnings(items)],
     sourceFormat: "postman-collection",
   };
 }

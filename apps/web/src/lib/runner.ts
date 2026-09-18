@@ -1,4 +1,4 @@
-import { isFolder, isRequest, type Collection, type RequestConfig, type RequestLocation } from "@api-lab/workspace-engine";
+import { isFolder, isRequest, type Collection, type CollectionItem, type RequestConfig, type RequestLocation } from "@api-lab/workspace-engine";
 import type { ApiResponseResult, ValidationError } from "@api-lab/request-engine";
 import type { TestResult } from "@api-lab/test-engine";
 import type { ExtractionResult } from "@api-lab/runner-engine";
@@ -12,25 +12,28 @@ export interface RunnableRequest {
   request: RequestConfig;
 }
 
-/** Flattens a collection's requests (top-level and one folder deep) in
- * collection/folder order — the Runner's execution order matches display
- * order exactly, with no separate sequencing concept to keep in sync. */
+/** Flattens a collection's requests (top-level and every nested folder, at
+ * any depth) in collection/folder order — the Runner's execution order
+ * matches display order exactly, with no separate sequencing concept to
+ * keep in sync. Each request's `location.folderPath` is the full ancestor
+ * chain (outermost first) it was found under. */
 export function flattenCollectionRequests(collection: Collection): RunnableRequest[] {
   const result: RunnableRequest[] = [];
-  for (const item of collection.items) {
-    if (isFolder(item)) {
-      for (const request of item.items) {
+  function walk(items: CollectionItem[], folderPath: string[]) {
+    for (const item of items) {
+      if (isFolder(item)) {
+        walk(item.items, [...folderPath, item.id]);
+      } else if (isRequest(item)) {
         result.push({
-          id: request.id,
-          name: request.name,
-          location: { collectionId: collection.id, folderId: item.id },
-          request: request.request,
+          id: item.id,
+          name: item.name,
+          location: { collectionId: collection.id, folderPath },
+          request: item.request,
         });
       }
-    } else if (isRequest(item)) {
-      result.push({ id: item.id, name: item.name, location: { collectionId: collection.id }, request: item.request });
     }
   }
+  walk(collection.items, []);
   return result;
 }
 

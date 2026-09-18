@@ -1,4 +1,4 @@
-import { isFolder } from "@api-lab/workspace-engine";
+import { isFolder, type CollectionItem } from "@api-lab/workspace-engine";
 import type { NormalizedCollectionImport, NormalizedEnvironmentImport, NormalizedItem, NormalizedWorkspaceImport } from "../types.ts";
 import { nativeExportSchema, type NativeExport } from "./schema.ts";
 
@@ -20,22 +20,25 @@ export function parseNativeExport(raw: unknown): NativeParseResult {
  * docs/ARCHITECTURE.md's Milestone 6 section) — re-importing a native
  * export is "restore a copy", not "resurrect the exact same objects".
  */
+// Phase 2 of Workspace Management: `CollectionItem`/`NormalizedItem` folders
+// both nest arbitrarily deep now, so this adapts the whole tree recursively
+// instead of assuming one flat level of folders.
+function adaptNativeItems(items: CollectionItem[]): NormalizedItem[] {
+  return items.map(
+    (item): NormalizedItem =>
+      isFolder(item)
+        ? { type: "folder", name: item.name, items: adaptNativeItems(item.items) }
+        : { type: "request", name: item.name, request: item.request, warnings: [] },
+  );
+}
+
 export function adaptNativeExport(data: NativeExport): NormalizedWorkspaceImport {
   const collections: NormalizedCollectionImport[] = data.workspace.collections.map((collection) => ({
     kind: "collection",
     name: collection.name,
     warnings: [],
     sourceFormat: "api-lab-native",
-    items: collection.items.map(
-      (item): NormalizedItem =>
-        isFolder(item)
-          ? {
-              type: "folder",
-              name: item.name,
-              items: item.items.map((r) => ({ type: "request", name: r.name, request: r.request, warnings: [] })),
-            }
-          : { type: "request", name: item.name, request: item.request, warnings: [] },
-    ),
+    items: adaptNativeItems(collection.items),
   }));
 
   const environments: NormalizedEnvironmentImport[] = data.environments.environments.map((env) => ({

@@ -6,6 +6,19 @@ function acceptDialog(page: Page, text?: string) {
   page.once("dialog", (dialog) => dialog.accept(text));
 }
 
+/** Monaco virtualizes long content in the Pretty viewer (only ~10-14 lines
+ * fit in the response panel's viewport before scrolling), so an assertion
+ * on content that isn't guaranteed to be near the top — a header buried
+ * among a real browser's other request headers, for instance — can fail
+ * simply because it was scrolled out of the rendered DOM, not because it's
+ * missing. Full-text response assertions use the plain-text Raw view
+ * instead, same pattern as auth.spec.ts and smoke.spec.ts's POST-JSON-body
+ * test. */
+async function rawResponseText(page: Page) {
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  return page.getByRole("region", { name: "Response" }).locator("pre");
+}
+
 async function openManager(page: Page) {
   await page.getByLabel("Manage environments").click();
   const dialog = page.getByRole("dialog", { name: "Manage environments" });
@@ -78,7 +91,8 @@ test.describe("Environments & variables", () => {
 
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"method": "GET"');
+    const raw = await rawResponseText(page);
+    await expect(raw).toContainText('"method":"GET"');
   });
 
   test("header variable is resolved and sent", async ({ page }) => {
@@ -96,7 +110,8 @@ test.describe("Environments & variables", () => {
 
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText("test-token-abc");
+    const raw = await rawResponseText(page);
+    await expect(raw).toContainText("test-token-abc");
   });
 
   test("body variable is resolved and sent", async ({ page }) => {

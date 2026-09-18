@@ -170,7 +170,7 @@ describe("Request Local Variables & Auth Inheritance UI", () => {
       useAppStore.setState((state) => {
         const tabs = state.tabs.map((t) =>
           t.id === activeTabId
-            ? { ...t, savedLocation: { collectionId: colId, folderId }, savedRequestId: "req-1" }
+            ? { ...t, savedLocation: { collectionId: colId, folderPath: [folderId] }, savedRequestId: "req-1" }
             : t,
         );
         return { tabs };
@@ -207,7 +207,7 @@ describe("Request Local Variables & Auth Inheritance UI", () => {
       useAppStore.setState((state) => {
         const tabs = state.tabs.map((t) =>
           t.id === activeTabId
-            ? { ...t, savedLocation: { collectionId: colId, folderId }, savedRequestId: "req-1" }
+            ? { ...t, savedLocation: { collectionId: colId, folderPath: [folderId] }, savedRequestId: "req-1" }
             : t,
         );
         return { tabs };

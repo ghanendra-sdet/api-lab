@@ -3,6 +3,7 @@ import { BODY_MODES, BODY_RAW_FORMATS, HTTP_METHODS } from "@api-lab/shared";
 import { authConfigSchema } from "@api-lab/auth-engine";
 import { assertionSchema } from "@api-lab/test-engine";
 import { extractionSchema } from "@api-lab/runner-engine";
+import type { CollectionItem, Folder } from "./types.ts";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
 const bodyModeSchema = z.enum([...BODY_MODES]);
@@ -61,18 +62,35 @@ const savedRequestSchema = z.object({
   updatedAt: z.string(),
 });
 
-const folderSchema = z.object({
-  id: z.string(),
-  type: z.literal("folder"),
-  name: z.string(),
-  items: z.array(savedRequestSchema),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  variables: z.array(variableSchema).default([]),
-  auth: authConfigSchema.default({ type: "inherit" }),
-});
+// Folders nest arbitrarily deep as of Phase 2 of Workspace Management, so
+// `folderSchema` and `collectionItemSchema` are mutually recursive — `z.lazy`
+// defers evaluation until parse time, the standard zod pattern for this.
+// A pre-Phase-2 flat folder (items: SavedRequest[] only) still parses fine:
+// it is simply a folder whose `items` array happens to contain zero nested
+// folders, nothing about the old shape needs a migration.
+// The explicit third generic (`unknown`) is the schema's *input* type —
+// left loose rather than exactly `CollectionItem`/`Folder` because several
+// fields use zod `.default(...)` (e.g. `variables`, `auth`), whose *input*
+// type allows `undefined` while the *output* type (after defaulting) does
+// not. Only the output type needs to match the real domain type; every
+// caller here only ever consumes `.safeParse(...).data`, never the raw
+// input shape.
+const collectionItemSchema: z.ZodType<CollectionItem, z.ZodTypeDef, unknown> = z.lazy(() =>
+  z.union([savedRequestSchema, folderSchema]),
+);
 
-const collectionItemSchema = z.union([savedRequestSchema, folderSchema]);
+const folderSchema: z.ZodType<Folder, z.ZodTypeDef, unknown> = z.lazy(() =>
+  z.object({
+    id: z.string(),
+    type: z.literal("folder"),
+    name: z.string(),
+    items: z.array(collectionItemSchema),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    variables: z.array(variableSchema).default([]),
+    auth: authConfigSchema.default({ type: "inherit" }),
+  }),
+);
 
 const collectionSchema = z.object({
   id: z.string(),
@@ -87,4 +105,17 @@ const collectionSchema = z.object({
 
 export const workspaceSchema = z.object({
   collections: z.array(collectionSchema),
+});
+
+const workspaceMetaSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const workspaceRegistrySchema = z.object({
+  workspaces: z.array(workspaceMetaSchema),
+  activeWorkspaceId: z.string(),
 });

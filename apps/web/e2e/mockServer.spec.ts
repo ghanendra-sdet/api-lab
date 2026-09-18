@@ -10,6 +10,18 @@ async function setUrl(page: Page, url: string) {
   await page.getByLabel("Request URL").fill(url);
 }
 
+/** Monaco virtualizes long content in the Pretty viewer (only ~10-14 lines
+ * fit in the response panel's viewport before scrolling), so an assertion
+ * on content that isn't guaranteed to be near the top can fail simply
+ * because it was scrolled out of the rendered DOM, not because it's
+ * missing. Full-text response assertions use the plain-text Raw view
+ * instead, same pattern as auth.spec.ts and smoke.spec.ts's POST-JSON-body
+ * test. */
+async function rawResponseText(page: Page) {
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  return page.getByRole("region", { name: "Response" }).locator("pre");
+}
+
 async function openMockServer(page: Page) {
   await page.getByRole("button", { name: "Mock Server" }).click();
   const dialog = page.getByRole("dialog", { name: "Mock Server" });
@@ -75,7 +87,8 @@ test.describe("Mock Server & API Simulation", () => {
     await setUrl(page, `${MOCK_BASE}/t2/users`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"users": []');
+    const raw2 = await rawResponseText(page);
+    await expect(raw2).toContainText('"users": []');
   });
 
   test("3. switching the active scenario changes the real server's response immediately", async ({ page }) => {
@@ -117,7 +130,8 @@ test.describe("Mock Server & API Simulation", () => {
     await setUrl(page, `${MOCK_BASE}/t4/users/123`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"id": "123"');
+    const raw4 = await rawResponseText(page);
+    await expect(raw4).toContainText('"id": "123"');
   });
 
   test("5. configured response headers are returned on the real response", async ({ page }) => {
@@ -276,6 +290,7 @@ test.describe("Mock Server & API Simulation", () => {
     await setUrl(page, "{{mockBaseUrl}}/t12/ping");
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"pong": true');
+    const raw12 = await rawResponseText(page);
+    await expect(raw12).toContainText('"pong": true');
   });
 });

@@ -16,7 +16,7 @@ import {
   type ContractModel,
   type ContractValidationResult,
 } from "@api-lab/contract-engine";
-import type { RequestConfig } from "@api-lab/workspace-engine";
+import type { Folder, RequestConfig } from "@api-lab/workspace-engine";
 import type { KeyValueRow } from "@api-lab/shared";
 import { resolveAuthConfig } from "./authResolve";
 import { resolveInheritedAuth } from "./authInheritance";
@@ -100,6 +100,58 @@ export interface ExecutionScopes {
    */
   folderAuth?: AuthConfig;
   collectionAuth?: AuthConfig;
+}
+
+/**
+ * Phase 2 of Workspace Management — nested folders, decision #5 (ancestor-
+ * CHAIN inheritance, not immediate-parent-only): flattens a folder's
+ * ancestor chain into a single variable scope, nearer (innermost) folder
+ * winning over farther (outermost) ones for the same key. `folderChain` is
+ * ordered outermost-to-innermost (see `workspaceLookup.ts`'s
+ * `resolveContainers`), so a plain left-to-right `Object.assign` gives the
+ * right precedence "for free": each folder's own variables overwrite its
+ * ancestors' as we walk inward.
+ *
+ * This produces exactly the value the existing `folder` scope of
+ * `ExecutionScopes`/`mergeResolutionContext` expects — a single
+ * `Record<string,string>` — so `mergeResolutionContext`'s shape and the
+ * rest of the seven-layer precedence chain (collection < folder < request <
+ * runtime < iteration) are completely untouched. This function only decides
+ * what goes *into* that one `folder` slot when there is more than one
+ * folder in the chain; it never talks to `mergeResolutionContext` itself.
+ *
+ * A request directly in a collection (no folder) gets an empty chain, which
+ * flattens to `{}` — identical to today's pre-nesting behavior.
+ */
+export function mergeFolderChainVariables(folderChain: Folder[]): Record<string, string> {
+  const merged: Record<string, string> = {};
+  for (const folder of folderChain) {
+    Object.assign(merged, buildVariableContextFromVariables(folder.variables));
+  }
+  return merged;
+}
+
+/**
+ * Phase 2 companion to `mergeFolderChainVariables`, for authorization
+ * instead of variables. Walks the folder ancestor chain from innermost to
+ * outermost looking for the first *concrete* (non-`"inherit"`) auth config —
+ * the nearer folder always wins per decision #5, mirroring
+ * `authInheritance.ts`'s `resolveInheritedAuth` Request→Folder→Collection
+ * rule, just extended across multiple folder levels instead of one.
+ *
+ * Returns `undefined` if every folder in the chain is still `"inherit"` (or
+ * the chain is empty), so the caller's existing
+ * `resolveInheritedAuth(requestAuth, folderChainAuth, collectionAuth)` call
+ * falls through to the Collection step exactly as it always has — this
+ * function only ever replaces what single `folderAuth` value that call
+ * receives, never `resolveInheritedAuth`'s own algorithm.
+ */
+export function resolveFolderChainAuth(folderChain: Folder[]): AuthConfig | undefined {
+  for (let i = folderChain.length - 1; i >= 0; i -= 1) {
+    const auth = folderChain[i]!.auth;
+    if (auth && auth.type !== "inherit") return auth;
+  }
+  return undefined;
 }
 
 /**

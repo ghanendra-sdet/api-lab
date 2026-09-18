@@ -149,7 +149,13 @@ export function adaptOpenApiDocument(doc: OpenApiDocument): NormalizedCollection
   }
 
   const items: NormalizedItem[] = [...folders.values(), ...untagged];
-  const allRequestWarnings = items.flatMap((i) => (i.type === "request" ? i.warnings : i.items.flatMap((r) => r.warnings)));
+  // `NormalizedFolder.items` is `NormalizedItem[]` (folders can nest as of
+  // Phase 2 of Workspace Management), even though this adapter only ever
+  // produces one flat level of tag-derived folders — recursing here costs
+  // nothing and stays correct if that ever changes.
+  const collectItemWarnings = (list: NormalizedItem[]): string[] =>
+    list.flatMap((i) => (i.type === "request" ? i.warnings : collectItemWarnings(i.items)));
+  const allRequestWarnings = collectItemWarnings(items);
 
   return {
     kind: "collection",

@@ -23,7 +23,7 @@ export function SaveRequestDialog({ tabId, onClose }: SaveRequestDialogProps) {
   function handleSave() {
     if (!collectionId || !name.trim()) return;
     try {
-      saveNewRequest(tabId, { collectionId, folderId: folderId || undefined }, name.trim());
+      saveNewRequest(tabId, { collectionId, folderPath: folderId ? [folderId] : [] }, name.trim());
       onClose();
     } catch (e) {
       const error = e as Error;

@@ -17,7 +17,7 @@ export function createRequest(
     createdAt: now,
     updatedAt: now,
   };
-  const next = withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) => [
+  const next = withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) => [
     ...items,
     saved,
   ]);
@@ -30,7 +30,7 @@ export function renameRequest(
   requestId: string,
   name: string,
 ): Workspace {
-  return withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) =>
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) =>
     items.map((item) => (isRequest(item) && item.id === requestId ? { ...item, name, updatedAt: touch() } : item)),
   );
 }
@@ -41,7 +41,7 @@ export function updateRequestConfig(
   requestId: string,
   request: RequestConfig,
 ): Workspace {
-  return withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) =>
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) =>
     items.map((item) =>
       isRequest(item) && item.id === requestId ? { ...item, request, updatedAt: touch() } : item,
     ),
@@ -49,7 +49,7 @@ export function updateRequestConfig(
 }
 
 export function deleteRequest(workspace: Workspace, location: RequestLocation, requestId: string): Workspace {
-  return withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) =>
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) =>
     items.filter((item) => !(isRequest(item) && item.id === requestId)),
   );
 }
@@ -59,7 +59,7 @@ export function duplicateRequest(
   location: RequestLocation,
   requestId: string,
 ): { workspace: Workspace; requestId: string } {
-  const source = getRequestsAtLocation(workspace, location.collectionId, location.folderId).find(
+  const source = getRequestsAtLocation(workspace, location.collectionId, location.folderPath ?? []).find(
     (r) => r.id === requestId,
   );
   if (!source) throw new Error(`Request not found: ${requestId}`);
@@ -77,7 +77,7 @@ export function duplicateRequest(
     updatedAt: now,
   };
 
-  const next = withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) => {
+  const next = withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) => {
     const index = items.findIndex((item) => isRequest(item) && item.id === requestId);
     const insertAt = index === -1 ? items.length : index + 1;
     return [...items.slice(0, insertAt), copy, ...items.slice(insertAt)];
@@ -92,14 +92,14 @@ export function moveRequest(
   to: RequestLocation,
   requestId: string,
 ): Workspace {
-  const source = getRequestsAtLocation(workspace, from.collectionId, from.folderId).find(
+  const source = getRequestsAtLocation(workspace, from.collectionId, from.folderPath ?? []).find(
     (r) => r.id === requestId,
   );
   if (!source) throw new Error(`Request not found: ${requestId}`);
 
-  const removed = withItemsAtLocation(workspace, from.collectionId, from.folderId, (items) =>
+  const removed = withItemsAtLocation(workspace, from.collectionId, from.folderPath ?? [], (items) =>
     items.filter((item) => !(isRequest(item) && item.id === requestId)),
   );
 
-  return withItemsAtLocation(removed, to.collectionId, to.folderId, (items) => [...items, source]);
+  return withItemsAtLocation(removed, to.collectionId, to.folderPath ?? [], (items) => [...items, source]);
 }

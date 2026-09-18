@@ -95,13 +95,19 @@ export function collectionToDriftEndpoints(collection: Collection): DriftInputEn
     });
   }
 
-  for (const item of collection.items) {
-    if (isFolder(item)) {
-      for (const request of item.items) add(request.id, request.name, request.request);
-    } else if (isRequest(item)) {
-      add(item.id, item.name, item.request);
+  // Folders nest arbitrarily deep (Phase 2 of Workspace Management), so
+  // walk the whole item tree recursively rather than assuming one flat
+  // level of folders.
+  function walk(items: typeof collection.items): void {
+    for (const item of items) {
+      if (isFolder(item)) {
+        walk(item.items);
+      } else if (isRequest(item)) {
+        add(item.id, item.name, item.request);
+      }
     }
   }
+  walk(collection.items);
 
   return endpoints;
 }

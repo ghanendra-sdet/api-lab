@@ -28,13 +28,13 @@ function buildCollection(): Collection {
   workspace = folderResult.workspace;
   workspace = createRequest(
     workspace,
-    { collectionId, folderId: folderResult.folderId },
+    { collectionId, folderPath: [folderResult.folderId] },
     "Login",
     sampleRequest({ method: "POST" }),
   ).workspace;
   workspace = createRequest(
     workspace,
-    { collectionId, folderId: folderResult.folderId },
+    { collectionId, folderPath: [folderResult.folderId] },
     "Logout",
     sampleRequest(),
   ).workspace;
@@ -52,8 +52,8 @@ describe("flattenCollectionRequests", () => {
   it("sets the correct location for top-level vs. folder requests", () => {
     const collection = buildCollection();
     const flat = flattenCollectionRequests(collection);
-    expect(flat[0]!.location).toEqual({ collectionId: collection.id });
-    expect(flat[1]!.location).toEqual({ collectionId: collection.id, folderId: collection.items[1]!.id });
+    expect(flat[0]!.location).toEqual({ collectionId: collection.id, folderPath: [] });
+    expect(flat[1]!.location).toEqual({ collectionId: collection.id, folderPath: [collection.items[1]!.id] });
   });
 
   it("returns an empty array for an empty collection", () => {

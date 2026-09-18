@@ -25,15 +25,42 @@ export function moveCollectionDown(workspace: Workspace, collectionId: string): 
   return { ...workspace, collections: moveById(workspace.collections, collectionId, "down") };
 }
 
-/** Reorders a folder or request among its siblings — within a collection's top level or within a folder. */
+/** Reorders a folder or request among its siblings — within a collection's top level or within a (possibly nested) folder. */
 export function moveItemUp(workspace: Workspace, location: RequestLocation, itemId: string): Workspace {
-  return withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) =>
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) =>
     moveById(items, itemId, "up"),
   );
 }
 
 export function moveItemDown(workspace: Workspace, location: RequestLocation, itemId: string): Workspace {
-  return withItemsAtLocation(workspace, location.collectionId, location.folderId, (items) =>
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) =>
     moveById(items, itemId, "down"),
   );
+}
+
+/**
+ * Drag-to-reorder within a single container (a collection's top level, or
+ * one folder's items) to an arbitrary target index — unlike `moveItemUp`/
+ * `moveItemDown`, which only swap with an adjacent sibling. `newIndex` is
+ * clamped to the container's bounds and interpreted as the item's *final*
+ * resting index after removal+reinsertion (so index 0 means "first", and an
+ * index equal to `items.length - 1` means "last"). A no-op (item not found,
+ * or already at `newIndex`) returns the same array reference.
+ */
+export function reorderItems(
+  workspace: Workspace,
+  location: RequestLocation,
+  itemId: string,
+  newIndex: number,
+): Workspace {
+  return withItemsAtLocation(workspace, location.collectionId, location.folderPath ?? [], (items) => {
+    const currentIndex = items.findIndex((item) => item.id === itemId);
+    if (currentIndex === -1) return items;
+    const clampedIndex = Math.max(0, Math.min(newIndex, items.length - 1));
+    if (clampedIndex === currentIndex) return items;
+    const next = [...items];
+    const [moved] = next.splice(currentIndex, 1);
+    next.splice(clampedIndex, 0, moved!);
+    return next;
+  });
 }

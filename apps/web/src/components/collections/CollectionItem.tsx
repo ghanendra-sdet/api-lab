@@ -1,12 +1,27 @@
-import { useState } from "react";
-import { isFolder, isRequest, type Collection } from "@api-lab/workspace-engine";
+import { useMemo, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { isFolder, isRequest, type Collection, type RequestLocation } from "@api-lab/workspace-engine";
 import { exportPostmanCollection } from "@api-lab/collection-format";
 import { useAppStore } from "../../store/useAppStore";
 import { downloadJson, slugifyFilename } from "../../lib/importExport";
+import { buildDndTree, containerKey, resolveDrop } from "../../lib/dndTree";
 import { RequestItem } from "./RequestItem";
 import { FolderItem } from "./FolderItem";
 import { RunnerDialog } from "../runner/RunnerDialog";
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog";
+import { DragPreview } from "./DragPreview";
+import { EmptyContainerDropZone } from "./EmptyContainerDropZone";
 
 interface CollectionItemProps {
   collection: Collection;
@@ -24,6 +39,68 @@ export function CollectionItem({ collection }: CollectionItemProps) {
   const moveCollectionUp = useAppStore((s) => s.moveCollectionUp);
   const moveCollectionDown = useAppStore((s) => s.moveCollectionDown);
   const activeTabId = useAppStore((s) => s.activeTabId);
+  const moveSavedRequest = useAppStore((s) => s.moveSavedRequest);
+  const moveFolderAction = useAppStore((s) => s.moveFolder);
+  const reorderItemsAction = useAppStore((s) => s.reorderItems);
+
+  // Phase 3 of Workspace Management: `CollectionItem` is the DnD root for
+  // its own subtree (per plan.md) — one `DndContext` here covers every
+  // `FolderItem`/`RequestItem` nested inside it, at any depth. `dndTree` is
+  // rebuilt fresh from `collection` on every render (see `dndTree.ts`), so
+  // it always reflects the current, pre-drag tree — no separate mount-time
+  // registration to keep in sync.
+  const dndTree = useMemo(() => buildDndTree(collection), [collection]);
+  const [activeDrag, setActiveDrag] = useState<{ id: string; name: string; type: "folder" | "request" } | null>(
+    null,
+  );
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function findItemName(id: string): string {
+    function walk(items: Collection["items"]): string | null {
+      for (const item of items) {
+        if (item.id === id) return item.name;
+        if (isFolder(item)) {
+          const found = walk(item.items);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    return walk(collection.items) ?? "";
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const id = String(event.active.id);
+    const meta = dndTree.meta.get(id);
+    if (!meta) return;
+    setActiveDrag({ id, name: findItemName(id), type: meta.type });
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDrag(null);
+    const action = resolveDrop(dndTree, String(event.active.id), event.over ? String(event.over.id) : null);
+    if (!action) return;
+    try {
+      if (action.kind === "reorder") {
+        reorderItemsAction(action.location, action.itemId, action.newIndex);
+      } else if (action.kind === "moveRequest") {
+        moveSavedRequest(action.from, action.to, action.requestId);
+        if (action.newIndex !== undefined) reorderItemsAction(action.to, action.requestId, action.newIndex);
+      } else {
+        moveFolderAction(action.from, action.to, action.folderId);
+        if (action.newIndex !== undefined) reorderItemsAction(action.to, action.folderId, action.newIndex);
+      }
+    } catch (err) {
+      // `moveFolder` throws if the drop would nest a folder inside its own
+      // descendant — a real, expected rejection (see `folder.ts`), not a
+      // bug. Swallow it here rather than let it propagate and crash the
+      // sidebar; nothing else reachable from a drop throws.
+      console.warn("Drag-and-drop move rejected:", err instanceof Error ? err.message : err);
+    }
+  }
 
   function handleRename() {
     const name = window.prompt("Rename collection", collection.name);
@@ -51,7 +128,11 @@ export function CollectionItem({ collection }: CollectionItemProps) {
     downloadJson(`${slugifyFilename(collection.name)}.postman_collection.json`, data);
   }
 
+  const rootLocation: RequestLocation = { collectionId: collection.id, folderPath: [] };
+  const rootItemIds = dndTree.containers.get(containerKey(rootLocation)) ?? [];
+
   return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
     <li>
       <div className="group flex items-center gap-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-900">
         <button
@@ -148,26 +229,28 @@ export function CollectionItem({ collection }: CollectionItemProps) {
         </div>
       </div>
       {expanded && (
-        <ul id={panelId} className="ml-3 space-y-0.5 border-l border-neutral-200 pl-2 dark:border-neutral-800">
-          {collection.items.length === 0 ? (
-            <li className="px-2 py-1 text-xs italic text-neutral-400 dark:text-neutral-600">
-              Empty collection — use + to add a request or folder
-            </li>
-          ) : (
-            collection.items.map((item) =>
-              isFolder(item) ? (
-                <FolderItem key={item.id} collectionId={collection.id} folder={item} />
-              ) : isRequest(item) ? (
-                <RequestItem key={item.id} request={item} location={{ collectionId: collection.id }} />
-              ) : null,
-            )
-          )}
-        </ul>
+        <SortableContext items={rootItemIds} strategy={verticalListSortingStrategy}>
+          <ul id={panelId} className="ml-3 space-y-0.5 border-l border-neutral-200 pl-2 dark:border-neutral-800">
+            {collection.items.length === 0 ? (
+              <EmptyContainerDropZone location={rootLocation} label="Empty collection — use + to add a request or folder" />
+            ) : (
+              collection.items.map((item) =>
+                isFolder(item) ? (
+                  <FolderItem key={item.id} collectionId={collection.id} folder={item} dndTree={dndTree} />
+                ) : isRequest(item) ? (
+                  <RequestItem key={item.id} request={item} location={{ collectionId: collection.id }} />
+                ) : null,
+              )
+            )}
+          </ul>
+        </SortableContext>
       )}
       {runnerOpen && <RunnerDialog collection={collection} onClose={() => setRunnerOpen(false)} />}
       {settingsOpen && (
         <CollectionSettingsDialog collection={collection} onClose={() => setSettingsOpen(false)} />
       )}
     </li>
+    <DragOverlay>{activeDrag && <DragPreview name={activeDrag.name} type={activeDrag.type} />}</DragOverlay>
+    </DndContext>
   );
 }

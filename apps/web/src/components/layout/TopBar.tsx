@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import { EnvironmentManager } from "../environments/EnvironmentManager";
 import { GlobalVariablesManager } from "../globals/GlobalVariablesManager";
@@ -6,8 +6,7 @@ import { MockServerManager } from "../mock/MockServerManager";
 import { ContractManager } from "../contract/ContractManager";
 import { SecurityManager } from "../security/SecurityManager";
 import { DocumentationManager } from "../documentation/DocumentationManager";
-
-const MANAGE_ENVIRONMENTS_VALUE = "__manage__";
+import { SettingsDialog } from "./SettingsDialog";
 
 export function TopBar() {
   const theme = useAppStore((s) => s.theme);
@@ -25,6 +24,29 @@ export function TopBar() {
   const [contractManagerOpen, setContractManagerOpen] = useState(false);
   const [securityManagerOpen, setSecurityManagerOpen] = useState(false);
   const [documentationManagerOpen, setDocumentationManagerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleGlobeMouseEnter = () => {
+    setTooltipOpen(true);
+    if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setTooltipOpen(false);
+    }, 2000);
+  };
+
+  const handleGlobeMouseLeave = () => {
+    setTooltipOpen(false);
+    if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+    };
+  }, []);
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 dark:border-neutral-800 dark:bg-neutral-950">
@@ -68,10 +90,6 @@ export function TopBar() {
           value={activeEnvironmentId ?? ""}
           onChange={(e) => {
             const { value } = e.target;
-            if (value === MANAGE_ENVIRONMENTS_VALUE) {
-              setManagerOpen(true);
-              return;
-            }
             setActiveEnvironment(value === "" ? null : value);
           }}
           className="rounded border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-700 hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-700"
@@ -82,7 +100,6 @@ export function TopBar() {
               {env.name}
             </option>
           ))}
-          <option value={MANAGE_ENVIRONMENTS_VALUE}>Manage Environments…</option>
         </select>
 
         <button
@@ -96,14 +113,23 @@ export function TopBar() {
           <GearIcon />
         </button>
 
-        <button
-          type="button"
-          onClick={() => setGlobalsManagerOpen(true)}
-          aria-label="Manage global variables"
-          className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-        >
-          <GlobeIcon />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setGlobalsManagerOpen(true)}
+            onMouseEnter={handleGlobeMouseEnter}
+            onMouseLeave={handleGlobeMouseLeave}
+            aria-label="Manage global variables"
+            className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+          >
+            <GlobeIcon />
+          </button>
+          {tooltipOpen && (
+            <div className="absolute right-0 top-9 z-50 w-48 rounded bg-neutral-900 px-2 py-1 text-center text-xs text-white shadow-md dark:bg-neutral-800">
+              Create, Update the Global Variables
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
@@ -112,7 +138,7 @@ export function TopBar() {
           aria-pressed={activeView === "performance"}
           className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
             activeView === "performance"
-              ? "font-medium text-blue-600 dark:text-blue-400"
+              ? "font-medium text-blue-600 dark:text-blue-400 bg-neutral-100 dark:bg-neutral-900"
               : "text-neutral-500"
           }`}
         >
@@ -123,7 +149,11 @@ export function TopBar() {
           type="button"
           onClick={() => setMockManagerOpen(true)}
           aria-label="Mock Server"
-          className="rounded px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+          className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            mockManagerOpen
+              ? "font-medium text-blue-600 dark:text-blue-400 bg-neutral-100 dark:bg-neutral-900"
+              : "text-neutral-500"
+          }`}
         >
           Mock Server
         </button>
@@ -132,7 +162,11 @@ export function TopBar() {
           type="button"
           onClick={() => setContractManagerOpen(true)}
           aria-label="Contract"
-          className="rounded px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+          className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            contractManagerOpen
+              ? "font-medium text-blue-600 dark:text-blue-400 bg-neutral-100 dark:bg-neutral-900"
+              : "text-neutral-500"
+          }`}
         >
           Contract
         </button>
@@ -141,7 +175,11 @@ export function TopBar() {
           type="button"
           onClick={() => setSecurityManagerOpen(true)}
           aria-label="Security"
-          className="rounded px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+          className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            securityManagerOpen
+              ? "font-medium text-blue-600 dark:text-blue-400 bg-neutral-100 dark:bg-neutral-900"
+              : "text-neutral-500"
+          }`}
         >
           Security
         </button>
@@ -150,9 +188,24 @@ export function TopBar() {
           type="button"
           onClick={() => setDocumentationManagerOpen(true)}
           aria-label="Documentation"
-          className="rounded px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+          className={`rounded px-2 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
+            documentationManagerOpen
+              ? "font-medium text-blue-600 dark:text-blue-400 bg-neutral-100 dark:bg-neutral-900"
+              : "text-neutral-500"
+          }`}
         >
           Docs
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
         </button>
 
         <button
@@ -172,6 +225,7 @@ export function TopBar() {
       {documentationManagerOpen && (
         <DocumentationManager onClose={() => setDocumentationManagerOpen(false)} />
       )}
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </header>
   );
 }

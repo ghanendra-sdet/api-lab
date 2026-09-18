@@ -16,6 +16,19 @@ async function createCollection(page: Page, name: string) {
   await expect(sidebar(page).getByText(name, { exact: true })).toBeVisible();
 }
 
+/** Monaco virtualizes long content in the Pretty viewer (only ~10-14 lines
+ * fit in the response panel's viewport before scrolling), so an assertion
+ * on content that isn't guaranteed to be near the top — a header buried
+ * among a real browser's other request headers, for instance — can fail
+ * simply because it was scrolled out of the rendered DOM, not because it's
+ * missing. Full-text response assertions use the plain-text Raw view
+ * instead, same pattern as auth.spec.ts and smoke.spec.ts's POST-JSON-body
+ * test. */
+async function rawResponseText(page: Page) {
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  return page.getByRole("region", { name: "Response" }).locator("pre");
+}
+
 async function setUrl(page: Page, url: string) {
   await page.getByLabel("Request URL").fill(url);
 }
@@ -98,7 +111,8 @@ test.describe("Request Dependencies E2E", () => {
 
     // Verify response contains echoed token
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"authorization": "Bearer tok-ada"');
+    const raw = await rawResponseText(page);
+    await expect(raw).toContainText('"authorization":"Bearer tok-ada"');
 
     // 6. Reload and verify configuration persists
     await page.reload();

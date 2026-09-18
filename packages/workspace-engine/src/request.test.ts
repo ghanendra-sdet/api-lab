@@ -27,7 +27,7 @@ describe("createRequest", () => {
       "Get Users",
       sampleRequestConfig(),
     );
-    const requests = getRequestsAtLocation(next, collectionId, undefined);
+    const requests = getRequestsAtLocation(next, collectionId);
     expect(requests).toHaveLength(1);
     expect(requests[0]!.id).toBe(requestId);
   });
@@ -37,11 +37,11 @@ describe("createRequest", () => {
     const { workspace: withFolder, folderId } = createFolder(workspace, collectionId, "Auth");
     const { workspace: next, requestId } = createRequest(
       withFolder,
-      { collectionId, folderId },
+      { collectionId, folderPath: [folderId] },
       "Login",
       sampleRequestConfig({ method: "POST" }),
     );
-    const requests = getRequestsAtLocation(next, collectionId, folderId);
+    const requests = getRequestsAtLocation(next, collectionId, [folderId]);
     expect(requests.map((r) => r.id)).toEqual([requestId]);
   });
 
@@ -127,7 +127,7 @@ describe("duplicateRequest", () => {
     );
     const { workspace: next, requestId: copyId } = duplicateRequest(withReq, { collectionId }, requestId);
     expect(copyId).not.toBe(requestId);
-    const requests = getRequestsAtLocation(next, collectionId, undefined);
+    const requests = getRequestsAtLocation(next, collectionId);
     const copy = requests.find((r) => r.id === copyId)!;
     expect(copy.name).toBe("Get Users Copy");
   });
@@ -168,10 +168,10 @@ describe("moveRequest", () => {
       sampleRequestConfig({ url: "https://example.com/users" }),
     );
 
-    const moved = moveRequest(withReq, { collectionId }, { collectionId, folderId }, requestId);
+    const moved = moveRequest(withReq, { collectionId }, { collectionId, folderPath: [folderId] }, requestId);
 
     expect(getRequestsAtLocation(moved, collectionId, undefined)).toHaveLength(0);
-    const inFolder = getRequestsAtLocation(moved, collectionId, folderId);
+    const inFolder = getRequestsAtLocation(moved, collectionId, [folderId]);
     expect(inFolder).toHaveLength(1);
     expect(inFolder[0]!.id).toBe(requestId);
     expect(inFolder[0]!.request.url).toBe("https://example.com/users");
@@ -183,19 +183,19 @@ describe("moveRequest", () => {
     const { workspace: w2, folderId: folderB } = createFolder(w1, collectionId, "B");
     const { workspace: w3, requestId } = createRequest(
       w2,
-      { collectionId, folderId: folderA },
+      { collectionId, folderPath: [folderA] },
       "Req",
       sampleRequestConfig(),
     );
 
     const moved = moveRequest(
       w3,
-      { collectionId, folderId: folderA },
-      { collectionId, folderId: folderB },
+      { collectionId, folderPath: [folderA] },
+      { collectionId, folderPath: [folderB] },
       requestId,
     );
 
-    expect(getRequestsAtLocation(moved, collectionId, folderA)).toHaveLength(0);
-    expect(getRequestsAtLocation(moved, collectionId, folderB).map((r) => r.id)).toEqual([requestId]);
+    expect(getRequestsAtLocation(moved, collectionId, [folderA])).toHaveLength(0);
+    expect(getRequestsAtLocation(moved, collectionId, [folderB]).map((r) => r.id)).toEqual([requestId]);
   });
 });

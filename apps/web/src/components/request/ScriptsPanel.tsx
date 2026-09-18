@@ -1,3 +1,4 @@
+import Editor from "@monaco-editor/react";
 import { useAppStore } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
 import type { ScriptResult } from "@api-lab/script-engine";
@@ -42,6 +43,7 @@ export function ScriptsPanel({ tab }: { tab: RequestTabState }) {
   const setPostResponseScript = useAppStore((s) => s.setPostResponseScript);
   const preResult = useAppStore((s) => s.preRequestScriptResults[tab.id]);
   const postResult = useAppStore((s) => s.postResponseScriptResults[tab.id]);
+  const theme = useAppStore((s) => s.theme);
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
@@ -51,35 +53,57 @@ export function ScriptsPanel({ tab }: { tab: RequestTabState }) {
       <div className="flex-1">
         <label
           htmlFor="pre-request-script"
-          className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+          className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
         >
           Pre-request Script
         </label>
-        <textarea
-          id="pre-request-script"
-          value={tab.preRequestScript}
-          onChange={(e) => setPreRequestScript(tab.id, e.target.value)}
-          spellCheck={false}
-          placeholder="// runs before the request is sent"
-          className="h-32 w-full resize-y rounded border border-neutral-200 bg-white p-2 font-mono text-sm text-neutral-800 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
-        />
+        <div className="h-40 overflow-hidden rounded border border-neutral-200 dark:border-neutral-800">
+          <Editor
+            height="100%"
+            language="javascript"
+            value={tab.preRequestScript}
+            onChange={(value) => setPreRequestScript(tab.id, value ?? "")}
+            theme={theme === "dark" ? "vs-dark" : "light"}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              fontFamily: "JetBrains Mono, SFMono-Regular, Menlo, monospace",
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              tabSize: 2,
+              automaticLayout: true,
+              ariaLabel: "Pre-request Script",
+            }}
+          />
+        </div>
         {preResult && <ScriptResultDisplay title="Pre-request Script" result={preResult} />}
       </div>
-      <div className="flex-1">
+      <div className="flex-1 mt-2">
         <label
           htmlFor="post-response-script"
-          className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+          className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
         >
           Post-response Script
         </label>
-        <textarea
-          id="post-response-script"
-          value={tab.postResponseScript}
-          onChange={(e) => setPostResponseScript(tab.id, e.target.value)}
-          spellCheck={false}
-          placeholder="// runs after the response arrives"
-          className="h-32 w-full resize-y rounded border border-neutral-200 bg-white p-2 font-mono text-sm text-neutral-800 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
-        />
+        <div className="h-40 overflow-hidden rounded border border-neutral-200 dark:border-neutral-800">
+          <Editor
+            height="100%"
+            language="javascript"
+            value={tab.postResponseScript}
+            onChange={(value) => setPostResponseScript(tab.id, value ?? "")}
+            theme={theme === "dark" ? "vs-dark" : "light"}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              fontFamily: "JetBrains Mono, SFMono-Regular, Menlo, monospace",
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              tabSize: 2,
+              automaticLayout: true,
+              ariaLabel: "Post-response Script",
+            }}
+          />
+        </div>
         {postResult && <ScriptResultDisplay title="Post-response Script" result={postResult} />}
       </div>
     </div>

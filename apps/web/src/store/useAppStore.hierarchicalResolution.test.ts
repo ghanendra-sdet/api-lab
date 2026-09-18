@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyEnvironmentWorkspace } from "@api-lab/environment-engine";
-import type { Collection, Folder, SavedRequest, Workspace } from "@api-lab/workspace-engine";
+import type { Collection, CollectionItem, Folder, SavedRequest, Workspace } from "@api-lab/workspace-engine";
 import { createEmptyWorkspace } from "@api-lab/workspace-engine";
 import { useAppStore } from "./useAppStore";
 import { createEmptyTab } from "../lib/seedData";
@@ -73,7 +73,7 @@ function savedRequest(overrides: Partial<SavedRequest["request"]> = {}, name = "
   };
 }
 
-function folder(items: SavedRequest[], overrides: Partial<Folder> = {}): Folder {
+function folder(items: CollectionItem[], overrides: Partial<Folder> = {}): Folder {
   const now = new Date().toISOString();
   return {
     id: nextId("folder"),
@@ -396,6 +396,35 @@ describe("D.1 Step 5 — authentication inheritance (integration)", () => {
     expect(headers.Authorization).toBeUndefined();
   });
 
+  it("Phase 2 (nested folders): request inherit -> child inherit -> parent's explicit auth is used (skips over the inherit child to the nearest CONCRETE ancestor)", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    const req = savedRequest({ auth: { type: "inherit" } });
+    const child = folder([req], { auth: { type: "inherit" } });
+    const parentFld = folder([child], { auth: { type: "bearer", token: "parent-token" } });
+    const grandparentFld = folder([parentFld], { auth: { type: "bearer", token: "grandparent-token" } });
+    const coll = collection([grandparentFld], { auth: { type: "bearer", token: "collection-token" } });
+    await runSingle(fetchMock, workspaceOf(coll), coll.id, req.id);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const headers = init!.headers as Record<string, string>;
+    // Nearer concrete ancestor (parent) wins over the farther grandparent,
+    // even though the immediate (child) folder is the closest folder overall.
+    expect(headers.Authorization).toBe("Bearer parent-token");
+  });
+
+  it("Phase 2 (nested folders): every folder in the chain is inherit -> falls through to the Collection's explicit auth", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    const req = savedRequest({ auth: { type: "inherit" } });
+    const child = folder([req], { auth: { type: "inherit" } });
+    const parentFld = folder([child], { auth: { type: "inherit" } });
+    const coll = collection([parentFld], { auth: { type: "bearer", token: "collection-token" } });
+    await runSingle(fetchMock, workspaceOf(coll), coll.id, req.id);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const headers = init!.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer collection-token");
+  });
+
   it("resolves an inherited auth token's own {{variable}} reference (variable interpolation still applies post-inheritance)", async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
     const req = savedRequest({ auth: { type: "inherit" } });
@@ -419,6 +448,44 @@ describe("D.1 Step 5 — authentication inheritance (integration)", () => {
   it("now resolved: tab-based Send supports request-local `variables`", () => {
     const tab = createEmptyTab();
     expect(tab.variables).toEqual([]);
+  });
+
+  it("Phase 2 (nested folders): ancestor-chain variable resolution — nearer folder wins, farther folders still contribute distinct keys", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    const req = savedRequest({ url: "https://example.com/?v={{val}}&gp={{gp}}" });
+    const child = folder([req], { variables: [{ id: "cv1", key: "val", value: "child", enabled: true, secret: false }] });
+    const parentFld = folder([child], { variables: [{ id: "pv1", key: "val", value: "parent", enabled: true, secret: false }] });
+    const grandparentFld = folder([parentFld], {
+      variables: [
+        { id: "gv1", key: "val", value: "grandparent", enabled: true, secret: false },
+        { id: "gv2", key: "gp", value: "grandparent-only", enabled: true, secret: false },
+      ],
+    });
+    const coll = collection([grandparentFld]);
+    const ws = workspaceOf(coll);
+
+    await runSingle(fetchMock, ws, coll.id, req.id);
+
+    const [url] = fetchMock.mock.calls[0]!;
+    // The immediate (child) folder wins for `val`...
+    expect(String(url)).toContain("v=child");
+    // ...but `gp`, defined only by the grandparent, still comes through —
+    // the ancestor chain merges every level, not just the nearest one.
+    expect(String(url)).toContain("gp=grandparent-only");
+  });
+
+  it("Phase 2 (nested folders): a folder with no variables of its own is transparent — resolution skips straight to its ancestor", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    const req = savedRequest({ url: "https://example.com/?v={{val}}" });
+    const child = folder([req]); // no variables of its own
+    const parentFld = folder([child], { variables: [{ id: "pv1", key: "val", value: "parent", enabled: true, secret: false }] });
+    const coll = collection([parentFld]);
+    const ws = workspaceOf(coll);
+
+    await runSingle(fetchMock, ws, coll.id, req.id);
+
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toContain("v=parent");
   });
 
   it("resolves request-local variables and transmits them in outgoing request via sendRequest", async () => {

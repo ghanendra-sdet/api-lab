@@ -5,13 +5,6 @@ import type { RequestTabState } from "../../types";
 import { KeyValueEditor } from "../common/KeyValueEditor";
 import { FormDataEditor } from "./FormDataEditor";
 
-// KNOWN LIMITATION: @monaco-editor/react's default loader fetches Monaco's
-// assets from a CDN (jsdelivr) at runtime instead of the bundled npm package.
-// That's inconsistent with API Lab's zero-install/self-contained goal and adds
-// an unreviewed third-party runtime dependency. Tracked as a fix-before-relying-
-// on-it item: self-host the Monaco assets (vs/) and point the loader at them
-// locally, rather than solving asset bundling inside this UI-shell milestone.
-
 const BODY_MODE_LABELS: Record<BodyMode, string> = {
   none: "none",
   "form-data": "form-data",
@@ -26,6 +19,41 @@ const MONACO_LANGUAGE: Record<BodyRawFormat, string> = {
   HTML: "html",
 };
 
+function beautifyContent(content: string, format: BodyRawFormat): string {
+  if (format === "JSON") {
+    try {
+      const parsed = JSON.parse(content);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return content;
+    }
+  }
+  if (format === "XML" || format === "HTML") {
+    let formatted = "";
+    const reg = /(>)(<)(\/*)/g;
+    const html = content.replace(reg, "$1\r\n$2$3");
+    let pad = 0;
+    html.split("\r\n").forEach((line) => {
+      let indent = 0;
+      if (line.match(/.+<\/\w[^>]*>$/)) {
+        indent = 0;
+      } else if (line.match(/^<\/\w/)) {
+        if (pad !== 0) {
+          pad -= 1;
+        }
+      } else if (line.match(/^<\w[^>]*[^/]>.*$/)) {
+        indent = 1;
+      } else {
+        indent = 0;
+      }
+      formatted += "  ".repeat(pad) + line + "\r\n";
+      pad += indent;
+    });
+    return formatted.trim();
+  }
+  return content;
+}
+
 export function BodyPanel({ tab }: { tab: RequestTabState }) {
   const setBodyMode = useAppStore((s) => s.setBodyMode);
   const setBodyRawFormat = useAppStore((s) => s.setBodyRawFormat);
@@ -38,6 +66,11 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
   const addBodyUrlencodedRow = useAppStore((s) => s.addBodyUrlencodedRow);
   const updateBodyUrlencodedRow = useAppStore((s) => s.updateBodyUrlencodedRow);
   const removeBodyUrlencodedRow = useAppStore((s) => s.removeBodyUrlencodedRow);
+
+  const handleBeautify = () => {
+    const formatted = beautifyContent(tab.bodyRawContent, tab.bodyRawFormat);
+    setBodyRawContent(tab.id, formatted);
+  };
 
   return (
     <div className="flex h-full flex-col p-4">
@@ -58,18 +91,27 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
         ))}
 
         {tab.bodyMode === "raw" && (
-          <select
-            aria-label="Raw body format"
-            value={tab.bodyRawFormat}
-            onChange={(e) => setBodyRawFormat(tab.id, e.target.value as BodyRawFormat)}
-            className="ml-auto rounded border border-neutral-200 bg-white px-2 py-1 text-sm hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
-          >
-            {BODY_RAW_FORMATS.map((format) => (
-              <option key={format} value={format}>
-                {format}
-              </option>
-            ))}
-          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBeautify}
+              className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Beautify
+            </button>
+            <select
+              aria-label="Raw body format"
+              value={tab.bodyRawFormat}
+              onChange={(e) => setBodyRawFormat(tab.id, e.target.value as BodyRawFormat)}
+              className="rounded border border-neutral-200 bg-white px-2 py-1 text-sm hover:border-neutral-300 focus-visible:border-transparent dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
+            >
+              {BODY_RAW_FORMATS.map((format) => (
+                <option key={format} value={format}>
+                  {format}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </fieldset>
 
@@ -99,7 +141,6 @@ export function BodyPanel({ tab }: { tab: RequestTabState }) {
           onRemove={(rowId) => removeBodyUrlencodedRow(tab.id, rowId)}
         />
       )}
-
 
       {tab.bodyMode === "raw" && (
         <div className="min-h-[220px] flex-1 overflow-hidden rounded border border-neutral-200 dark:border-neutral-800">

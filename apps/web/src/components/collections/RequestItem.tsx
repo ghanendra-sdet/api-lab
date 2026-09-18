@@ -1,3 +1,5 @@
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { methodTextClass } from "../../lib/methodStyles";
 import { useAppStore } from "../../store/useAppStore";
 import type { SavedRequest, RequestLocation } from "@api-lab/workspace-engine";
@@ -8,6 +10,12 @@ interface RequestItemProps {
 }
 
 export function RequestItem({ request, location }: RequestItemProps) {
+  // Phase 3 of Workspace Management: a drag source (and a sortable drop
+  // target for reordering among its siblings) within the `DndContext`
+  // `CollectionItem` (its subtree's DnD root) provides. Requests are always
+  // leaves — never a "drop INTO" target the way folders are.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: request.id });
+  const sortableStyle = { transform: CSS.Transform.toString(transform), transition };
   const openSavedRequest = useAppStore((s) => s.openSavedRequest);
   const renameSavedRequest = useAppStore((s) => s.renameSavedRequest);
   const deleteSavedRequest = useAppStore((s) => s.deleteSavedRequest);
@@ -32,10 +40,22 @@ export function RequestItem({ request, location }: RequestItemProps) {
 
   return (
     <li
-      className={`group flex items-center gap-1 rounded ${
+      ref={setNodeRef}
+      style={sortableStyle}
+      className={`group flex items-center gap-1 rounded ${isDragging ? "opacity-40" : ""} ${
         isOpenInActiveTab ? "bg-blue-50 dark:bg-blue-950" : "hover:bg-neutral-100 dark:hover:bg-neutral-900"
       }`}
     >
+      <span
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag to move ${request.name}`}
+        role="button"
+        tabIndex={0}
+        className="shrink-0 cursor-grab px-1 text-neutral-300 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 active:cursor-grabbing dark:text-neutral-600"
+      >
+        ⠿
+      </span>
       <button
         type="button"
         onClick={() => openSavedRequest(location, request.id)}

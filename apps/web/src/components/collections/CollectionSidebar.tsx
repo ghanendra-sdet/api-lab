@@ -5,6 +5,7 @@ import { downloadJson } from "../../lib/importExport";
 import { CollectionItem } from "./CollectionItem";
 import { ImportDialog } from "../importExport/ImportDialog";
 import { HistorySidebar } from "./HistorySidebar";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 export function CollectionSidebar() {
   const collections = useAppStore((s) => s.workspace.collections);
@@ -28,6 +29,7 @@ export function CollectionSidebar() {
 
   return (
     <nav aria-label="Collections" className="flex h-full flex-col">
+      <WorkspaceSwitcher />
       <div className="flex border-b border-neutral-200 dark:border-neutral-800 shrink-0">
         <button
           type="button"

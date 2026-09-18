@@ -546,19 +546,19 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
 
       // Request A1 in Folder A
       setTabUrl(activeTabId, "https://example.com/a1");
-      saveNewRequest(activeTabId, { collectionId, folderId: folderAId }, "A1");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderAId] }, "A1");
 
       // Request A2 in Folder A
       const tab2 = createEmptyTab();
       useAppStore.setState({ tabs: [tab2], activeTabId: tab2.id });
       setTabUrl(tab2.id, "https://example.com/a2");
-      saveNewRequest(tab2.id, { collectionId, folderId: folderAId }, "A2");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderAId] }, "A2");
 
       // Request B1 in Folder B
       const tab3 = createEmptyTab();
       useAppStore.setState({ tabs: [tab3], activeTabId: tab3.id });
       setTabUrl(tab3.id, "https://example.com/b1");
-      saveNewRequest(tab3.id, { collectionId, folderId: folderBId }, "B1");
+      saveNewRequest(tab3.id, { collectionId, folderPath: [folderBId] }, "B1");
 
       const state = useAppStore.getState();
       const collection = state.workspace.collections.find((c) => c.id === collectionId)!;
@@ -601,7 +601,7 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       setTabUrl(activeTabId, "https://example.com/login");
       const extId = addExtraction(activeTabId);
       updateExtraction(activeTabId, extId, { source: "json", path: "$.token", variable: "sessionToken" });
-      saveNewRequest(activeTabId, { collectionId, folderId: authFolderId }, "Login");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [authFolderId] }, "Login");
 
       const collSnap1 = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const fAuth = collSnap1.items.find((i) => i.id === authFolderId)! as any;
@@ -615,7 +615,7 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       const hdrId = useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.headers[0]!.id;
       updateHeaderRow(tab2.id, hdrId, { key: "Authorization", value: "Bearer {{sessionToken}}", enabled: true });
       useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.dependsOn = [loginReqId];
-      saveNewRequest(tab2.id, { collectionId, folderId: userFolderId }, "Get Users");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [userFolderId] }, "Get Users");
 
       const collSnap2 = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const fUsers = collSnap2.items.find((i) => i.id === userFolderId)! as any;
@@ -648,13 +648,13 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
 
       // Request A depends on B
       setTabUrl(activeTabId, "https://example.com/a");
-      saveNewRequest(activeTabId, { collectionId, folderId: folderAId }, "A");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderAId] }, "A");
 
       // Request B depends on A
       const tab2 = createEmptyTab();
       useAppStore.setState({ tabs: [tab2], activeTabId: tab2.id });
       setTabUrl(tab2.id, "https://example.com/b");
-      saveNewRequest(tab2.id, { collectionId, folderId: folderBId }, "B");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderBId] }, "B");
 
       const snap1 = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const fA: any = snap1.items.find((item) => item.id === folderAId)!;
@@ -699,13 +699,13 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       setTabUrl(activeTabId, "https://example.com/fail");
       const assertionId = addAssertion(activeTabId);
       updateAssertion(activeTabId, assertionId, { target: "status", operator: "equals", expected: "200" });
-      saveNewRequest(activeTabId, { collectionId, folderId }, "A");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderId] }, "A");
 
       // Req B: skips
       const tab2 = createEmptyTab();
       useAppStore.setState({ tabs: [tab2], activeTabId: tab2.id });
       setTabUrl(tab2.id, "https://example.com/ok");
-      saveNewRequest(tab2.id, { collectionId, folderId }, "B");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderId] }, "B");
 
       const snap = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const folder: any = snap.items.find((item) => item.id === folderId)!;
@@ -742,7 +742,7 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       setTabUrl(activeTabId, "https://example.com/login");
       const extId = addExtraction(activeTabId);
       updateExtraction(activeTabId, extId, { source: "json", path: "$.token", variable: "token" });
-      saveNewRequest(activeTabId, { collectionId, folderId }, "Login");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderId] }, "Login");
 
       const snap = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const folder: any = snap.items.find((item) => item.id === folderId)!;
@@ -756,7 +756,7 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       const hdrId = useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.headers[0]!.id;
       updateHeaderRow(tab2.id, hdrId, { key: "Authorization", value: "Bearer {{token}}", enabled: true });
       useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.dependsOn = [loginReqId];
-      saveNewRequest(tab2.id, { collectionId, folderId }, "Whoami");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderId] }, "Whoami");
 
       const snap2 = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const folder2: any = snap2.items.find((item) => item.id === folderId)!;
@@ -787,12 +787,12 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       const folderId = createFolder(collectionId, "Folder F");
 
       setTabUrl(activeTabId, "https://example.com/a");
-      saveNewRequest(activeTabId, { collectionId, folderId }, "A");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderId] }, "A");
 
       const tab2 = createEmptyTab();
       useAppStore.setState({ tabs: [tab2], activeTabId: tab2.id });
       setTabUrl(tab2.id, "https://example.com/b");
-      saveNewRequest(tab2.id, { collectionId, folderId }, "B");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderId] }, "B");
 
       const snap = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const folder: any = snap.items.find((item) => item.id === folderId)!;
@@ -950,7 +950,7 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       const hdrId = useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.headers[0]!.id;
       updateHeaderRow(tab2.id, hdrId, { key: "Authorization", value: "Bearer {{token}}", enabled: true });
       useAppStore.getState().tabs.find((t) => t.id === tab2.id)!.dependsOn = [loginId];
-      saveNewRequest(tab2.id, { collectionId, folderId }, "Whoami");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [folderId] }, "Whoami");
 
       const snap2 = useAppStore.getState().workspace.collections.find((c) => c.id === collectionId)!;
       const folder: any = snap2.items.find((item: any) => item.id === folderId)!;
@@ -1075,11 +1075,11 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       const folderId = createFolder(collectionId, "Folder A");
       
       setTabUrl(activeTabId, "https://example.com/folder-item");
-      saveNewRequest(activeTabId, { collectionId, folderId }, "FolderItem1");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [folderId] }, "FolderItem1");
 
       const runStore = useAppStore.getState();
       const collection = runStore.workspace.collections.find((c) => c.id === collectionId)!;
-      const requests = flattenCollectionRequests(collection).filter((r) => r.location.folderId === folderId);
+      const requests = flattenCollectionRequests(collection).filter((r) => (r.location.folderPath ?? []).includes(folderId));
       const requestIds = requests.map((r) => r.id);
 
       await useAppStore.getState().startRunner(collectionId, requestIds, null, true, folderId);
@@ -1088,6 +1088,59 @@ describe("useAppStore runner — Milestone 8: chaining, datasets, isolation", ()
       expect(history.length).toBe(1);
       expect(history[0]!.folderId).toBe(folderId);
       expect(history[0]!.folderName).toBe("Folder A");
+    });
+
+    it("Phase 2: 'Run Folder' on a folder with a NESTED subfolder finds and executes the nested requests, not zero (regression test for the folder-scoping fix)", async () => {
+      // Before Phase 2's fix, the folder-scoped filter was an exact match
+      // (`r.location.folderId === folderId`), which would silently find
+      // ZERO requests here — every request in this test lives in a
+      // subfolder of the folder being run, never directly in it. This test
+      // is the scenario plan.md calls out by name: it must fail loudly (via
+      // a failing assertion below) rather than the Runner silently doing
+      // nothing.
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+      const { createCollection, createFolder, saveNewRequest, activeTabId, setTabUrl } = useAppStore.getState();
+      const collectionId = createCollection("Nested Folder Run Collection");
+      const topFolderId = createFolder(collectionId, "Top Folder");
+      const subFolderId = createFolder(collectionId, "Sub Folder", topFolderId);
+
+      setTabUrl(activeTabId, "https://example.com/nested-item");
+      saveNewRequest(activeTabId, { collectionId, folderPath: [topFolderId, subFolderId] }, "NestedItem1");
+
+      const tab2 = createEmptyTab();
+      useAppStore.setState({ tabs: [tab2], activeTabId: tab2.id });
+      setTabUrl(tab2.id, "https://example.com/nested-item-2");
+      saveNewRequest(tab2.id, { collectionId, folderPath: [topFolderId, subFolderId] }, "NestedItem2");
+
+      const runStore = useAppStore.getState();
+      const collection = runStore.workspace.collections.find((c) => c.id === collectionId)!;
+
+      // Exactly the descendant-inclusive filter RunnerDialog.tsx now uses
+      // for "Run Folder" — this is what previously would have returned [].
+      const requests = flattenCollectionRequests(collection).filter((r) =>
+        (r.location.folderPath ?? []).includes(topFolderId),
+      );
+      expect(requests.map((r) => r.name).sort()).toEqual(["NestedItem1", "NestedItem2"]);
+      const requestIds = requests.map((r) => r.id);
+
+      await useAppStore.getState().startRunner(collectionId, requestIds, null, true, topFolderId);
+
+      const finalState = useAppStore.getState().runnerState;
+      expect(finalState.status).toBe("completed");
+      expect(finalState.iterations[0]!.items).toHaveLength(2);
+      // "skipped" (not "passed") is correct here: each request sent
+      // successfully but has no assertions to evaluate, same convention
+      // used elsewhere in this file (see the "nothing to assert" comment
+      // above). The point of this test is that both nested requests were
+      // found and executed at all — not zero, as the pre-fix exact-match
+      // filter would have produced.
+      expect(finalState.iterations[0]!.items.every((i) => i.status === "skipped")).toBe(true);
+      expect(finalState.iterations[0]!.items.every((i) => i.response?.ok)).toBe(true);
+
+      const history = useAppStore.getState().runnerHistory;
+      expect(history[0]!.folderId).toBe(topFolderId);
+      expect(history[0]!.folderName).toBe("Top Folder");
+      expect(history[0]!.totalRequests).toBe(2);
     });
 
     it("prunes response body and headers from history entries", async () => {

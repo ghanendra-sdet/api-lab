@@ -3,6 +3,8 @@ import { useAppStore } from "../../store/useAppStore";
 import type { RequestTabState } from "../../types";
 import {
   resolveDependencyOrder,
+  type CollectionItem,
+  type SavedRequest,
   type Workspace,
 } from "@api-lab/workspace-engine";
 
@@ -16,6 +18,29 @@ interface SelectableRequest {
   displayName: string;
 }
 
+/**
+ * Walks every saved request in a workspace, at any folder depth (Phase 2 of
+ * Workspace Management — folders nest arbitrarily), handing `visit` the
+ * request alongside a `[collectionName, ...folderNames]` breadcrumb.
+ */
+function walkWorkspaceRequests(
+  ws: Workspace,
+  visit: (req: SavedRequest, breadcrumb: string[]) => void,
+): void {
+  function walk(items: CollectionItem[], breadcrumb: string[]) {
+    for (const item of items) {
+      if (item.type === "folder") {
+        walk(item.items, [...breadcrumb, item.name]);
+      } else if (item.type === "request") {
+        visit(item, breadcrumb);
+      }
+    }
+  }
+  for (const col of ws.collections) {
+    walk(col.items, [col.name]);
+  }
+}
+
 export function DependenciesPanel({ tab }: DependenciesPanelProps) {
   const workspace = useAppStore((s) => s.workspace);
   const setTabDependsOn = useAppStore((s) => s.setTabDependsOn);
@@ -26,61 +51,32 @@ export function DependenciesPanel({ tab }: DependenciesPanelProps) {
 
   // 1. Build a local helper to find request details in workspace
   function findRequestDetails(ws: Workspace, depId: string) {
-    for (const col of ws.collections) {
-      for (const item of col.items) {
-        if (item.type === "folder") {
-          for (const req of item.items) {
-            if (req.id === depId) {
-              return {
-                name: req.name,
-                path: `${col.name} › ${item.name} › ${req.name}`,
-                exists: true,
-              };
-            }
-          }
-        } else if (item.type === "request") {
-          if (item.id === depId) {
-            return {
-              name: item.name,
-              path: `${col.name} › ${item.name}`,
-              exists: true,
-            };
-          }
-        }
+    let found: { name: string; path: string; exists: true } | undefined;
+    walkWorkspaceRequests(ws, (req, breadcrumb) => {
+      if (!found && req.id === depId) {
+        found = { name: req.name, path: [...breadcrumb, req.name].join(" › "), exists: true };
       }
-    }
-    return {
-      name: `Deleted request (ID: ${depId})`,
-      path: `Deleted request (ID: ${depId})`,
-      exists: false,
-    };
+    });
+    return (
+      found ?? {
+        name: `Deleted request (ID: ${depId})`,
+        path: `Deleted request (ID: ${depId})`,
+        exists: false,
+      }
+    );
   }
 
   // 2. Build list of selectable requests across all collections/folders
   const selectableRequests: SelectableRequest[] = [];
-  for (const col of workspace.collections) {
-    for (const item of col.items) {
-      if (item.type === "folder") {
-        for (const req of item.items) {
-          if (req.id !== targetId) {
-            selectableRequests.push({
-              id: req.id,
-              name: req.name,
-              displayName: `${col.name} › ${item.name} › ${req.name}`,
-            });
-          }
-        }
-      } else if (item.type === "request") {
-        if (item.id !== targetId) {
-          selectableRequests.push({
-            id: item.id,
-            name: item.name,
-            displayName: `${col.name} › ${item.name}`,
-          });
-        }
-      }
+  walkWorkspaceRequests(workspace, (req, breadcrumb) => {
+    if (req.id !== targetId) {
+      selectableRequests.push({
+        id: req.id,
+        name: req.name,
+        displayName: [...breadcrumb, req.name].join(" › "),
+      });
     }
-  }
+  });
 
   // Filter out requests already added as dependencies
   const filteredSelectable = selectableRequests.filter(
@@ -103,17 +99,9 @@ export function DependenciesPanel({ tab }: DependenciesPanelProps) {
   // 4. Perform live canonical dependency validation and build order
   function buildLocalDependencyMap(ws: Workspace): Record<string, string[]> {
     const map: Record<string, string[]> = {};
-    for (const col of ws.collections) {
-      for (const item of col.items) {
-        if (item.type === "folder") {
-          for (const req of item.items) {
-            map[req.id] = req.request.dependsOn || [];
-          }
-        } else if (item.type === "request") {
-          map[item.id] = item.request.dependsOn || [];
-        }
-      }
-    }
+    walkWorkspaceRequests(ws, (req) => {
+      map[req.id] = req.request.dependsOn || [];
+    });
     return map;
   }
 

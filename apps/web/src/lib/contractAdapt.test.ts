@@ -127,7 +127,7 @@ describe("collectionToDriftEndpoints", () => {
     const folderResult = createFolder(workspace, collectionId, "Folder");
     workspace = createRequest(
       folderResult.workspace,
-      { collectionId, folderId: folderResult.folderId },
+      { collectionId, folderPath: [folderResult.folderId] },
       "Nested",
       emptyRequestConfigFor({ method: "POST", url: "http://localhost:4010/api/users" }),
     ).workspace;

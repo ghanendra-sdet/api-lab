@@ -3,6 +3,7 @@ import { authConfigSchema } from "@api-lab/auth-engine";
 import { assertionSchema } from "@api-lab/test-engine";
 import { extractionSchema } from "@api-lab/runner-engine";
 import { HTTP_METHODS, BODY_MODES, BODY_RAW_FORMATS } from "@api-lab/shared";
+import type { CollectionItem, Folder } from "@api-lab/workspace-engine";
 
 const httpMethodSchema = z.enum([...HTTP_METHODS]);
 const bodyModeSchema = z.enum([...BODY_MODES]);
@@ -50,22 +51,36 @@ const savedRequestSchema = z.object({
   updatedAt: z.string(),
 });
 
-const folderSchema = z.object({
-  id: z.string(),
-  type: z.literal("folder"),
-  name: z.string(),
-  items: z.array(savedRequestSchema),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  variables: z.array(variableSchema).optional(),
-  auth: authConfigSchema.optional(),
-});
+// Folders nest arbitrarily deep as of Phase 2 of Workspace Management —
+// mutually recursive via z.lazy, same pattern as workspace-engine's own
+// schema.ts (this file mirrors that package's schema for native export/
+// import round-tripping, see the file-level docstring below).
+// See workspace-engine's schema.ts for why the input generic is loosened to
+// `unknown` here (zod `.optional()`/`.default()` fields' input type allows
+// `undefined`, which the real domain types don't) — this file mirrors that
+// package's schema for native export/import round-tripping.
+const collectionItemSchema: z.ZodType<CollectionItem, z.ZodTypeDef, unknown> = z.lazy(() =>
+  z.union([savedRequestSchema, folderSchema]),
+);
+
+const folderSchema: z.ZodType<Folder, z.ZodTypeDef, unknown> = z.lazy(() =>
+  z.object({
+    id: z.string(),
+    type: z.literal("folder"),
+    name: z.string(),
+    items: z.array(collectionItemSchema),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    variables: z.array(variableSchema).optional(),
+    auth: authConfigSchema.optional(),
+  }),
+);
 
 const collectionSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
-  items: z.array(z.union([savedRequestSchema, folderSchema])),
+  items: z.array(collectionItemSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
   variables: z.array(variableSchema).optional(),

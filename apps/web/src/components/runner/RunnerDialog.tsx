@@ -1,12 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { isFolder, type Collection } from "@api-lab/workspace-engine";
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import type { Collection } from "@api-lab/workspace-engine";
 import { parseDataset } from "@api-lab/runner-engine";
 import { useAppStore } from "../../store/useAppStore";
 import type { RunnerRunHistoryItem } from "../../types";
+import { findFolder as findFolderInTree } from "../../lib/workspaceLookup";
 import { flattenCollectionRequests, summarizeRunner, summarizeRunnerContract, summarizeRunnerCategories, type RunnerItemStatus, type RunnerState } from "../../lib/runner";
 import { ContractViolationList } from "../contract/ContractViolationList";
 import { findSpecificationForCollection, useContractStore } from "../../store/useContractStore";
 import { Dialog } from "../common/Dialog";
+import { RunnerOrderRow } from "./RunnerOrderRow";
 
 interface RunnerDialogProps {
   collection: Collection;
@@ -68,17 +72,49 @@ export function RunnerDialog({ collection, folderId, onClose }: RunnerDialogProp
 
   const folder = useMemo(() => {
     if (!folderId) return null;
-    return collection.items.find((item) => isFolder(item) && item.id === folderId);
+    // Folders can nest arbitrarily deep (Phase 2 of Workspace Management) —
+    // the requested folder may be a subfolder anywhere in the tree, not
+    // just a top-level item.
+    return findFolderInTree(collection, folderId);
   }, [collection, folderId]);
 
   const requests = useMemo(() => {
     const all = flattenCollectionRequests(collection);
     if (folderId) {
-      return all.filter((r) => r.location.folderId === folderId);
+      // "Run Folder" must include every request in this folder OR ANY
+      // DESCENDANT folder, not just requests directly in it — an exact
+      // match here would silently run zero requests for any folder whose
+      // requests all live in a nested subfolder (see plan.md's Phase 2
+      // risk callout: this is the one change that had to ship in the same
+      // commit as the `RequestLocation.folderPath` type change).
+      return all.filter((r) => (r.location.folderPath ?? []).includes(folderId));
     }
     return all;
   }, [collection, folderId]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(requests.map((r) => r.id)));
+  // Phase 3 of Workspace Management: closes Collection Runner gap items
+  // #1/#2 (see plan.md) — an independent, user-editable, flat execution
+  // order, separate from both the collection's own item order and the
+  // selection checkboxes. Initialized from `requests`' natural (collection-
+  // tree) order, same as `selected`, but from here on the user can
+  // drag-reorder it freely.
+  const [executionOrder, setExecutionOrder] = useState<string[]>(() => requests.map((r) => r.id));
+  const orderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleOrderDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setExecutionOrder((prev) => {
+      const oldIndex = prev.indexOf(String(active.id));
+      const newIndex = prev.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }
+
   const [environmentId, setEnvironmentId] = useState<string>("");
   const [stopOnFailure, setStopOnFailure] = useState(true);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -139,7 +175,16 @@ export function RunnerDialog({ collection, folderId, onClose }: RunnerDialogProp
     if (!runnerDataset && isIterationsValid) {
       setRunnerIterations(iterationsVal);
     }
-    void startRunner(collection.id, [...selected], environmentId || null, stopOnFailure, folderId);
+    // The user-reorderable `executionOrder` (drag-and-drop in the list
+    // below), filtered down to just the checked requests, IS the run's
+    // execution order now — not `[...selected]`'s Set-insertion order.
+    void startRunner(
+      collection.id,
+      executionOrder.filter((id) => selected.has(id)),
+      environmentId || null,
+      stopOnFailure,
+      folderId,
+    );
   }
 
   function handleClose() {
@@ -388,26 +433,30 @@ export function RunnerDialog({ collection, folderId, onClose }: RunnerDialogProp
               )}
 
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Requests ({selected.size}/{requests.length})
+                Requests ({selected.size}/{requests.length}) — drag ⠿ to set execution order
               </p>
               {requests.length === 0 ? (
                 <p className="text-sm text-neutral-400 dark:text-neutral-600">This collection has no requests to run.</p>
               ) : (
-                <ul className="space-y-1">
-                  {requests.map((r) => (
-                    <li key={r.id}>
-                      <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.id)}
-                          onChange={() => toggleSelected(r.id)}
-                          className="h-4 w-4 rounded border-neutral-300 text-blue-600 dark:border-neutral-700"
-                        />
-                        {r.name}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                <DndContext sensors={orderSensors} collisionDetection={closestCenter} onDragEnd={handleOrderDragEnd}>
+                  <SortableContext items={executionOrder} strategy={verticalListSortingStrategy}>
+                    <ul className="space-y-1">
+                      {executionOrder.map((id) => {
+                        const r = requests.find((req) => req.id === id);
+                        if (!r) return null;
+                        return (
+                          <RunnerOrderRow
+                            key={id}
+                            id={id}
+                            name={r.name}
+                            checked={selected.has(id)}
+                            onToggle={() => toggleSelected(id)}
+                          />
+                        );
+                      })}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
               )}
             </>
           )}

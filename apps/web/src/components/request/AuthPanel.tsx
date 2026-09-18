@@ -190,6 +190,7 @@ export function AuthFieldsEditor({ auth, onChange, showInherit = false }: AuthFi
 
 import { resolveContainers } from "../../lib/workspaceLookup";
 import { resolveInheritedAuth } from "../../lib/authInheritance";
+import { resolveFolderChainAuth } from "../../lib/executeRequest";
 
 export function AuthPanel({ tab }: { tab: RequestTabState }) {
   const setAuth = useAppStore((s) => s.setAuth);
@@ -198,12 +199,20 @@ export function AuthPanel({ tab }: { tab: RequestTabState }) {
 
   let inheritanceInfo = "";
   if (auth.type === "inherit") {
-    const { collection, folder } = resolveContainers(workspace, tab.savedLocation);
-    const resolvedAuth = resolveInheritedAuth(auth, folder?.auth, collection?.auth);
+    // Phase 2: folders can nest, so consult the full ancestor chain's auth
+    // (nearer folder wins), not just the immediate folder's — same helper
+    // the real execution pipeline uses (executeRequest.ts), so this preview
+    // can never say something different from what actually gets sent.
+    const { collection, folderChain } = resolveContainers(workspace, tab.savedLocation);
+    const resolvedAuth = resolveInheritedAuth(auth, resolveFolderChainAuth(folderChain), collection?.auth);
+    // The specific folder (nearest to farthest) that actually supplied the
+    // concrete auth, if any — for a precise "Inherited from folder X" label
+    // even when that folder is a grandparent, not the immediate one.
+    const sourceFolder = [...folderChain].reverse().find((f) => f.auth?.type !== "inherit");
 
     if (tab.savedLocation) {
-      if (folder && folder.auth?.type !== "inherit") {
-        inheritanceInfo = `↳ Inherited from folder "${folder.name}" (${AUTH_LABELS[resolvedAuth.type]})`;
+      if (sourceFolder) {
+        inheritanceInfo = `↳ Inherited from folder "${sourceFolder.name}" (${AUTH_LABELS[resolvedAuth.type]})`;
       } else if (collection) {
         inheritanceInfo = `↳ Inherited from collection "${collection.name}" (${AUTH_LABELS[resolvedAuth.type]})`;
       } else {

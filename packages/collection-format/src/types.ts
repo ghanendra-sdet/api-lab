@@ -17,10 +17,17 @@ export interface NormalizedRequest {
   warnings: string[];
 }
 
+/**
+ * Phase 2 of Workspace Management: API Lab folders nest arbitrarily deep, so
+ * a `NormalizedFolder`'s items may themselves include nested
+ * `NormalizedFolder`s — no longer capped at requests only. Adapters that
+ * source from a genuinely flat format (e.g. OpenAPI tags) simply never
+ * produce a nested folder; nothing about them needs to change.
+ */
 export interface NormalizedFolder {
   type: "folder";
   name: string;
-  items: NormalizedRequest[];
+  items: NormalizedItem[];
 }
 
 export type NormalizedItem = NormalizedFolder | NormalizedRequest;

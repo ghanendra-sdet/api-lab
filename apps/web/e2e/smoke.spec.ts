@@ -14,6 +14,19 @@ async function setUrl(page: Page, url: string) {
   await page.getByLabel("Request URL").fill(url);
 }
 
+/** Monaco virtualizes long content in the Pretty viewer (only ~10-14 lines
+ * fit in the response panel's viewport before scrolling), so an assertion
+ * on content that isn't guaranteed to be near the top — a header buried
+ * among a real browser's other request headers, for instance — can fail
+ * simply because it was scrolled out of the rendered DOM, not because it's
+ * missing. Full-text response assertions use the plain-text Raw view
+ * instead, same pattern as auth.spec.ts and this file's own POST-JSON-body
+ * test below. */
+async function rawResponseText(page: Page) {
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  return page.getByRole("region", { name: "Response" }).locator("pre");
+}
+
 test.describe("API Lab application shell", () => {
   test("loads and shows the core workspace areas", async ({ page }) => {
     await page.goto("/");
@@ -61,7 +74,8 @@ test.describe("Request execution", () => {
     await page.getByRole("button", { name: "Send" }).click();
 
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"method": "GET"');
+    const raw1 = await rawResponseText(page);
+    await expect(raw1).toContainText('"method":"GET"');
   });
 
   test("query parameters are sent and echoed back", async ({ page }) => {
@@ -74,7 +88,8 @@ test.describe("Request execution", () => {
 
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText('"search": "api-lab"');
+    const raw2 = await rawResponseText(page);
+    await expect(raw2).toContainText('"search":"api-lab"');
   });
 
   test("custom headers are actually sent to the server", async ({ page }) => {
@@ -87,7 +102,8 @@ test.describe("Request execution", () => {
 
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    await expect(page.locator(".monaco-editor")).toContainText("test-abc-123");
+    const raw3 = await rawResponseText(page);
+    await expect(raw3).toContainText("test-abc-123");
   });
 
   test("POST with a JSON body is sent and echoed back", async ({ page }) => {
@@ -104,13 +120,8 @@ test.describe("Request execution", () => {
 
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
-    // Monaco virtualizes long content, so switch to the plain-text Raw view
-    // (not subject to viewport virtualization) to assert on body content that
-    // may be scrolled out of view in the Pretty (Monaco) viewer.
-    await page.getByRole("button", { name: "Raw", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Response" }).locator("pre")).toContainText(
-      '"name":"API Lab"',
-    );
+    const raw4 = await rawResponseText(page);
+    await expect(raw4).toContainText('"name":"API Lab"');
   });
 
   test("204 empty response is handled without crashing", async ({ page }) => {

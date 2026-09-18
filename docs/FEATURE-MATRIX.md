@@ -32,8 +32,8 @@ Every planned feature, with priority, the milestone phase it belongs to (see [`R
 | Cookies (per-domain jar) | P2 | 2 | Deferred (Future Scope) — browser JS cannot read `Set-Cookie` response headers; requires a server-side proxy not yet built. |
 | Body: raw JSON | P0 | 2 | Done (Monaco editor, JSON validation before send) |
 | Body: raw XML / Text / HTML | P1 | 2 | Done (sent as raw text with the matching Content-Type; no XML/HTML validation) |
-| Body: form-data (multipart) | P1 | 2 | Deferred (Future Scope) — raw JSON covers the overwhelming majority of REST API testing. Postman imports preserve form-data as readable text with an explicit warning. Requires FormData/Blob integration, file picker, and a key-value body builder UI. |
-| Body: x-www-form-urlencoded | P1 | 2 | Deferred (Future Scope) — same rationale as form-data. Workaround: send as raw text with `Content-Type: application/x-www-form-urlencoded` header. |
+| Body: form-data (multipart) | P1 | 2 | Done (key-value editor with enable/disable, text and metadata-only file fields, compiled to a real `FormData`/multipart payload with a browser-generated boundary) |
+| Body: x-www-form-urlencoded | P1 | 2 | Done (key-value editor with enable/disable, compiled to a URL-encoded body with `Content-Type: application/x-www-form-urlencoded`) |
 | Body: binary/file upload | P1 | 2 | Deferred (Future Scope) — requires File API integration beyond raw body scope. |
 | Send request / view response | P0 | 2 | Done (via `BrowserFetchExecutor` / native fetch) |
 | Request cancellation | P1 | 2 | Done (`AbortController`) |

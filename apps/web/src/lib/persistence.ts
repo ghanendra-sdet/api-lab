@@ -1,4 +1,11 @@
-import { deserializeWorkspace, serializeWorkspace, type Workspace } from "@api-lab/workspace-engine";
+import {
+  deserializeWorkspace,
+  deserializeWorkspaceRegistry,
+  serializeWorkspace,
+  serializeWorkspaceRegistry,
+  type Workspace,
+  type WorkspaceRegistry,
+} from "@api-lab/workspace-engine";
 import {
   deserializeEnvironments,
   serializeEnvironments,
@@ -11,16 +18,36 @@ import { z } from "zod";
 
 const HISTORY_KEY = "api-lab-request-history";
 const WORKSPACE_KEY = "api-lab-workspace";
+const WORKSPACE_REGISTRY_KEY = "api-lab-workspace-registry";
 const TABS_KEY = "api-lab-tabs";
 const ENVIRONMENTS_KEY = "api-lab-environments";
 const GLOBALS_KEY = "api-lab-globals";
 const GLOBALS_FORMAT_VERSION = 1;
 const DEBOUNCE_MS = 400;
 
+/**
+ * The id of the one workspace that exists before Workspace Management
+ * (Phase 1) ships. Its persisted data lives at the pre-existing WORKSPACE_KEY
+ * — never rewritten, never duplicated, just referenced by the new registry.
+ * See workspaceStorageKey below and loadWorkspaceRegistryFromStorage's
+ * migration path.
+ */
+export const LEGACY_WORKSPACE_ID = "default";
+
+/** Where a given workspace's `Workspace{collections}` blob is stored. The
+ * legacy/default workspace keeps using the original single-workspace key
+ * (zero-data-loss migration); every workspace created afterwards gets its
+ * own dedicated key. */
+export function workspaceStorageKey(workspaceId: string): string {
+  return workspaceId === LEGACY_WORKSPACE_ID ? WORKSPACE_KEY : `api-lab-workspace-${workspaceId}`;
+}
+
 // ---------------------------------------------------------------------------
 // Workspace (collections/folders/requests) — the important, must-be-correct
 // data. Strictly validated against the versioned schema before it's trusted;
-// see @api-lab/workspace-engine's deserializeWorkspace.
+// see @api-lab/workspace-engine's deserializeWorkspace. Each workspace in the
+// registry (see below) has its own independent blob, keyed by
+// workspaceStorageKey(workspaceId).
 // ---------------------------------------------------------------------------
 
 export type LoadWorkspaceResult =
@@ -28,9 +55,9 @@ export type LoadWorkspaceResult =
   | { status: "ok"; workspace: Workspace }
   | { status: "error"; detail: string };
 
-export function loadWorkspaceFromStorage(): LoadWorkspaceResult {
+export function loadWorkspaceFromStorage(workspaceId: string): LoadWorkspaceResult {
   if (typeof window === "undefined") return { status: "empty" };
-  const raw = window.localStorage.getItem(WORKSPACE_KEY);
+  const raw = window.localStorage.getItem(workspaceStorageKey(workspaceId));
   if (raw === null) return { status: "empty" };
 
   let parsed: unknown;
@@ -45,10 +72,10 @@ export function loadWorkspaceFromStorage(): LoadWorkspaceResult {
   return { status: "ok", workspace: result.workspace };
 }
 
-function writeWorkspaceNow(workspace: Workspace): void {
+function writeWorkspaceNow(workspaceId: string, workspace: Workspace): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(WORKSPACE_KEY, JSON.stringify(serializeWorkspace(workspace)));
+    window.localStorage.setItem(workspaceStorageKey(workspaceId), JSON.stringify(serializeWorkspace(workspace)));
   } catch {
     // Storage full or unavailable (private browsing, quota exceeded) — the
     // in-memory workspace is still correct, it just won't survive a reload.
@@ -58,9 +85,102 @@ function writeWorkspaceNow(workspace: Workspace): void {
 
 export const saveWorkspaceToStorage = debounce(writeWorkspaceNow, DEBOUNCE_MS);
 
-export function resetWorkspaceStorage(): void {
+/**
+ * Writes immediately, bypassing the debounce. Callers must use this — never
+ * the debounced saveWorkspaceToStorage — right before switching the active
+ * workspace: the debounced writer is a single shared timer keyed by nothing,
+ * so a pending write for workspace A followed immediately by a debounced
+ * write for workspace B would cancel A's write, silently dropping A's last
+ * edit. Flushing synchronously first closes that race.
+ */
+export function flushWorkspaceToStorage(workspaceId: string, workspace: Workspace): void {
+  writeWorkspaceNow(workspaceId, workspace);
+}
+
+export function resetWorkspaceStorage(workspaceId: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(WORKSPACE_KEY);
+  window.localStorage.removeItem(workspaceStorageKey(workspaceId));
+}
+
+// ---------------------------------------------------------------------------
+// Workspace registry (Phase 1 of Workspace Management) — the list of
+// workspaces + which one is active. A dedicated versioned envelope, separate
+// from any individual workspace's data.
+//
+// Migration: the very first time this key is read and found missing, a
+// registry is synthesized in memory with exactly one entry — id
+// LEGACY_WORKSPACE_ID, name "My Workspace" — and written out. Its data blob
+// is never touched: workspaceStorageKey(LEGACY_WORKSPACE_ID) resolves to the
+// original WORKSPACE_KEY, so whatever was already there (a real user's
+// collections, or nothing for a brand-new install) becomes that workspace's
+// data by reference, not by copy. Zero risk of duplication or loss.
+// ---------------------------------------------------------------------------
+
+function createDefaultRegistry(): WorkspaceRegistry {
+  const now = new Date().toISOString();
+  return {
+    workspaces: [{ id: LEGACY_WORKSPACE_ID, name: "My Workspace", createdAt: now, updatedAt: now }],
+    activeWorkspaceId: LEGACY_WORKSPACE_ID,
+  };
+}
+
+function writeWorkspaceRegistryNow(registry: WorkspaceRegistry): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WORKSPACE_REGISTRY_KEY, JSON.stringify(serializeWorkspaceRegistry(registry)));
+  } catch {
+    // Non-fatal, same reasoning as writeWorkspaceNow.
+  }
+}
+
+export const saveWorkspaceRegistryToStorage = debounce(writeWorkspaceRegistryNow, DEBOUNCE_MS);
+
+/** Immediate, non-debounced write — see flushWorkspaceToStorage's reasoning;
+ * the same race applies to the registry's activeWorkspaceId. */
+export function flushWorkspaceRegistryToStorage(registry: WorkspaceRegistry): void {
+  writeWorkspaceRegistryNow(registry);
+}
+
+export type LoadWorkspaceRegistryResult =
+  | { status: "ok"; registry: WorkspaceRegistry; migrated: boolean }
+  | { status: "error"; detail: string; fallback: WorkspaceRegistry };
+
+/**
+ * Loads the workspace registry, migrating a pre-Phase-1 single-workspace
+ * install on first read. Never mutates the legacy WORKSPACE_KEY blob itself.
+ * On a corrupted registry blob, returns an in-memory fallback registry
+ * (still pointing at LEGACY_WORKSPACE_ID, so the app keeps working) without
+ * overwriting the unreadable stored key — same "don't clobber possibly-
+ * recoverable data" policy as loadWorkspaceFromStorage's error path.
+ */
+export function loadWorkspaceRegistryFromStorage(): LoadWorkspaceRegistryResult {
+  if (typeof window === "undefined") {
+    return { status: "ok", registry: createDefaultRegistry(), migrated: false };
+  }
+
+  const raw = window.localStorage.getItem(WORKSPACE_REGISTRY_KEY);
+  if (raw === null) {
+    const registry = createDefaultRegistry();
+    writeWorkspaceRegistryNow(registry);
+    return { status: "ok", registry, migrated: true };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {
+      status: "error",
+      detail: "Saved workspace registry is not valid JSON.",
+      fallback: createDefaultRegistry(),
+    };
+  }
+
+  const result = deserializeWorkspaceRegistry(parsed);
+  if (!result.ok) {
+    return { status: "error", detail: result.detail, fallback: createDefaultRegistry() };
+  }
+  return { status: "ok", registry: result.registry, migrated: false };
 }
 
 // ---------------------------------------------------------------------------

@@ -140,13 +140,20 @@ function toDocRequest(saved: SavedRequest, folderName: string | undefined): DocC
 export function collectionToDocSource(collection: Collection): DocCollectionSource {
   const requests: DocCollectionRequest[] = [];
 
-  for (const item of collection.items) {
-    if (isFolder(item)) {
-      for (const saved of item.items) requests.push(toDocRequest(saved, item.name));
-    } else if (isRequest(item)) {
-      requests.push(toDocRequest(item, undefined));
+  // Folders nest arbitrarily deep (Phase 2 of Workspace Management) — walk
+  // the whole tree, building a "Parent / Child" breadcrumb as `folderName`
+  // for anything nested more than one level, rather than assuming a flat
+  // single folder level.
+  function walk(items: typeof collection.items, folderPath: string[]): void {
+    for (const item of items) {
+      if (isFolder(item)) {
+        walk(item.items, [...folderPath, item.name]);
+      } else if (isRequest(item)) {
+        requests.push(toDocRequest(item, folderPath.length > 0 ? folderPath.join(" / ") : undefined));
+      }
     }
   }
+  walk(collection.items, []);
 
   return {
     name: collection.name,

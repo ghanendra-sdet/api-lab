@@ -19,6 +19,34 @@ async function addAssertionRow(page: Page) {
   return page.locator("tbody tr").last();
 }
 
+/** Monaco (via @monaco-editor/react) renders its input surface as a custom
+ * `role="textbox"` div using the browser's EditContext API, not a real
+ * <textarea> or classic contenteditable — Playwright's `.fill()` throws
+ * ("Element is not an <input>, <textarea> or [contenteditable] element")
+ * because it can't recognize it as a fillable element at all. The supported
+ * interaction is: click to focus, select any existing content, then type via
+ * the keyboard — same pattern already used for the raw-body editor in
+ * smoke.spec.ts. */
+async function fillScriptEditor(page: Page, label: string, script: string) {
+  // The aria-labelled element is Monaco's input-surface div, but its own
+  // `.view-lines` child layer visually sits on top and is what actually
+  // receives pointer events — clicking the input surface directly gets
+  // blocked by that overlay. Scope to the specific editor instance (there
+  // are two: Pre-request and Post-response Script) via the labelled
+  // descendant, then click its `.view-lines`, same pattern as the raw-body
+  // editor in smoke.spec.ts.
+  // insertText (a single atomic, paste-like insertion) rather than type()
+  // (individual simulated keystrokes) — typing multi-line scripts containing
+  // brackets/quotes character-by-character triggers Monaco's auto-closing-
+  // bracket/quote feature, which duplicates delimiters already present in the
+  // typed text and corrupts the script into a syntax error. A pasted/inserted
+  // block is not subject to that per-keystroke behavior.
+  const editorRoot = page.locator(".monaco-editor").filter({ has: page.getByLabel(label) });
+  await editorRoot.locator(".view-lines").click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.insertText(script);
+}
+
 function sidebar(page: Page) {
   return page.getByRole("navigation", { name: "Collections" });
 }
@@ -259,7 +287,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
     await page.getByRole("tablist", { name: "Request configuration" }).getByRole("tab", { name: "Scripts" }).click();
     await expect(page.getByText(/Scripts execute in a secure browser Web Worker sandbox/)).toBeVisible();
 
-    await page.getByLabel("Pre-request Script").fill('console.log("SANDBOX_RUNNING"); apiLab.variables.set("myVar", "helloFromScript");');
+    await fillScriptEditor(page, "Pre-request Script", 'console.log("SANDBOX_RUNNING"); apiLab.variables.set("myVar", "helloFromScript");');
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
@@ -273,7 +301,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
   test("unrestricted globals like window and document are undefined inside the sandbox", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("tablist", { name: "Request configuration" }).getByRole("tab", { name: "Scripts" }).click();
-    await page.getByLabel("Pre-request Script").fill('console.log("window: " + typeof window); console.log("document: " + typeof document);');
+    await fillScriptEditor(page, "Pre-request Script", 'console.log("window: " + typeof window); console.log("document: " + typeof document);');
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
@@ -286,7 +314,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
   test("invalid script syntax fails cleanly and does not crash the application", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("tablist", { name: "Request configuration" }).getByRole("tab", { name: "Scripts" }).click();
-    await page.getByLabel("Pre-request Script").fill('const x = ;'); // Syntax error
+    await fillScriptEditor(page, "Pre-request Script", 'const x = ;'); // Syntax error
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
     // Pre-request script failure stops execution, so no 200 response is received.
@@ -321,7 +349,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
         console.log("error: " + e.message);
       }
     `;
-    await page.getByLabel("Pre-request Script").fill(maliciousScript);
+    await fillScriptEditor(page, "Pre-request Script", maliciousScript);
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
@@ -362,7 +390,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
         console.log("error: " + e.message);
       }
     `;
-    await page.getByLabel("Pre-request Script").fill(maliciousScript);
+    await fillScriptEditor(page, "Pre-request Script", maliciousScript);
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
     await expect(page.getByText(/^200/)).toBeVisible();
@@ -377,7 +405,7 @@ test.describe("Testing Engine — scripts and sandboxing", () => {
   test("infinite loop script triggers a timeout and terminates worker cleanly", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("tablist", { name: "Request configuration" }).getByRole("tab", { name: "Scripts" }).click();
-    await page.getByLabel("Pre-request Script").fill('while (true) {}');
+    await fillScriptEditor(page, "Pre-request Script", 'while (true) {}');
     await setUrl(page, `${FIXTURE_BASE}/echo`);
     await page.getByRole("button", { name: "Send" }).click();
 

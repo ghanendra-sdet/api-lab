@@ -4,7 +4,7 @@ import { buildMockServer } from "./server.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const PORT = Number(process.env.MOCK_SERVER_PORT ?? 4010);
+const PORT = Number(process.env.MOCK_SERVER_PORT ?? process.env.PORT ?? 4010);
 const DATA_FILE = process.env.MOCK_SERVER_DATA_FILE ?? join(__dirname, "..", "data", "mock-routes.json");
 const CORS_ORIGIN = process.env.MOCK_SERVER_CORS_ORIGIN ?? true;
 
